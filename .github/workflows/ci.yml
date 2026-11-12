@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The image's build stage runs npm ci and npm run check (typecheck,
+      # unit tests, production build) in the pinned Node image.
+      - name: Build the image (typecheck, tests, production build)
+        run: docker build --build-arg SOURCE_COMMIT="$GITHUB_SHA" -t pathops-frontend:ci .
+
+      - name: Serve it read-only and check the SPA and its headers
+        run: scripts/smoke.sh pathops-frontend:ci
