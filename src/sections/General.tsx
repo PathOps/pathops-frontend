@@ -74,14 +74,6 @@ export function General({ overview: o }: { overview: Overview }) {
         </Field>
         <Field label="Images">{o.images}</Field>
       </dl>
-      <dl className="panel">
-        <h2>Repositories</h2>
-        {o.repositories.map((r) => (
-          <Field key={r.role} label={r.role}>
-            {r.url ? <ExternalLink href={r.url}>{r.fullName}</ExternalLink> : r.fullName}
-          </Field>
-        ))}
-      </dl>
     </div>
   );
 }

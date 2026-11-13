@@ -60,7 +60,7 @@ describe("Applications", () => {
 });
 
 describe("Application", () => {
-  it("has the sections the Tenant CP names, and General shows the template, technology and repositories", async () => {
+  it("has the sections the Tenant CP names, and General shows the template and technology", async () => {
     renderAt(`/applications/${f.appId}/general`, fakeApi(all));
     const tabs = await screen.findByRole("navigation", { name: "Application sections" });
     expect(within(tabs).getAllByRole("link").map((l) => l.textContent)).toEqual([
@@ -74,9 +74,7 @@ describe("Application", () => {
     expect(screen.queryByText(/Preflight/)).toBeNull();
     expect(screen.getByRole("link", { name: f.overview.template.url })).toHaveAttribute("href", f.overview.template.url);
     expect(screen.getByText("Dockerfile (BuildKit)")).toBeInTheDocument();
-    const src = screen.getByRole("link", { name: "alice/manual-web" });
-    expect(src).toHaveAttribute("href", "https://forgejo-canary.demo.pathops.io/alice/manual-web");
-    expect(src).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.queryByRole("heading", { name: "Repositories" })).toBeNull();
   });
 
   it("is not found for an id that is not the user's", async () => {
@@ -105,6 +103,9 @@ describe("Application", () => {
       "href",
       "https://forgejo-canary.demo.pathops.io/alice/manual-web-gitops-production",
     );
+    const src = screen.getByRole("link", { name: "alice/manual-web" });
+    expect(src).toHaveAttribute("href", "https://forgejo-canary.demo.pathops.io/alice/manual-web");
+    expect(src).toHaveAttribute("rel", "noopener noreferrer");
   });
 
   it("lists images with their digest and their build, and no registry metadata", async () => {
