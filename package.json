@@ -1,7 +1,7 @@
 {
   "name": "pathops-frontend",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "The PathOps Application UI: a read-only view of a Cell's Applications, served as static files.",
   "license": "MIT",

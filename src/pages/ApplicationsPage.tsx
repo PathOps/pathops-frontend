@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import type { ApplicationSummary, Technology } from "../api/types";
 import { useResource } from "../api/useResource";
-import { Head12, Loaded, RefreshButton, StatusBadge, Time } from "../components/ui";
+import { Field, Head12, Loaded, RefreshButton, StatusBadge, Time } from "../components/ui";
 
 export function technologyLine(t: Technology | null): string {
   if (!t) return "Technology not declared";
@@ -22,30 +22,32 @@ export function ApplicationsPage() {
           <ul className="cards">
             {d.applications.map((a) => (
               <li key={a.id} className="card">
-                <div className="card-title">
+                <h2 className="card-heading">
                   <Link to={`/applications/${a.id}/general`}>{a.name}</Link>
-                  <StatusBadge status={a.status} />
-                </div>
-                <p className="muted">
-                  {technologyLine(a.technology)} · template {a.templateId}
-                </p>
-                <p>
-                  Provisioning <StatusBadge status={a.provisioning.status} />
-                </p>
-                <p>
-                  Last delivery{" "}
-                  {a.lastDelivery ? (
-                    <Link to={`/applications/${a.id}/deliveries/${a.lastDelivery.id}`}>
-                      <StatusBadge status={a.lastDelivery.status} />{" "}
-                      <Head12 revision={a.lastDelivery.sourceRevision} head12={a.lastDelivery.head12} />
-                    </Link>
-                  ) : (
-                    <span className="muted">none yet</span>
-                  )}
-                </p>
-                <p className="muted small">
-                  Created <Time at={a.createdAt} />
-                </p>
+                </h2>
+                <dl>
+                  <Field label="Technology">{technologyLine(a.technology)}</Field>
+                  <Field label="Template">{a.templateId}</Field>
+                  <Field label="Provisioning">
+                    <StatusBadge status={a.provisioning.status} />
+                  </Field>
+                  <Field label="Status">
+                    <StatusBadge status={a.status} />
+                  </Field>
+                  <Field label="Last delivery">
+                    {a.lastDelivery ? (
+                      <Link to={`/applications/${a.id}/deliveries/${a.lastDelivery.id}`}>
+                        <StatusBadge status={a.lastDelivery.status} />{" "}
+                        <Head12 revision={a.lastDelivery.sourceRevision} head12={a.lastDelivery.head12} />
+                      </Link>
+                    ) : (
+                      <span className="muted">none yet</span>
+                    )}
+                  </Field>
+                  <Field label="Created">
+                    <Time at={a.createdAt} />
+                  </Field>
+                </dl>
               </li>
             ))}
           </ul>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { BuildDetail, Log, Tasks, TaskRunView } from "../api/types";
 import { running, useResource } from "../api/useResource";
@@ -141,8 +141,8 @@ function TaskRuns({ buildId, buildRunning }: { buildId: string; buildRunning: bo
   );
 }
 
-// TaskRunList is a build's TaskRuns with their steps. One TaskRun's logs are
-// open at a time, under that TaskRun.
+// TaskRunList is a build's TaskRuns with their steps. One step's log is open
+// at a time, in a row under that step.
 export function TaskRunList({ buildId, buildRunning }: { buildId: string; buildRunning: boolean }) {
   const t = useResource<Tasks>(`/api/v1/builds/${encodeURIComponent(buildId)}/tasks`, { pollWhile: () => buildRunning });
   const [open, setOpen] = useState<string | null>(null);
@@ -157,7 +157,7 @@ export function TaskRunList({ buildId, buildRunning }: { buildId: string; buildR
           <ul className="plain" aria-label="TaskRun list">
             {d.taskRuns.map((tr) => (
               <li key={tr.name}>
-                <TaskRun buildId={buildId} tr={tr} logs={open === tr.name} onLogs={() => setOpen(open === tr.name ? null : tr.name)} />
+                <TaskRun buildId={buildId} tr={tr} open={open} onLog={(key) => setOpen(open === key ? null : key)} />
               </li>
             ))}
           </ul>
@@ -167,23 +167,16 @@ export function TaskRunList({ buildId, buildRunning }: { buildId: string; buildR
   );
 }
 
-function TaskRun({ buildId, tr, logs, onLogs }: { buildId: string; tr: TaskRunView; logs: boolean; onLogs: () => void }) {
+function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunView; open: string | null; onLog: (key: string) => void }) {
   return (
     <div className="panel taskrun" aria-label={`TaskRun ${tr.pipelineTask}`}>
-      <div className="taskrun-head">
-        <h3>
-          {tr.pipelineTask} <StatusBadge status={tr.status} label={tr.reason || tr.status || tr.observation} />{" "}
-          <span className="muted small">
-            {tr.task && <>task {tr.task} · </>}
-            <code>{tr.name}</code> · <Duration seconds={seconds(tr.startTime, tr.completionTime)} />
-          </span>
-        </h3>
-        {tr.steps.length > 0 && (
-          <button type="button" className="link-button" aria-expanded={logs} onClick={onLogs}>
-            {logs ? "Hide logs" : "View logs"}
-          </button>
-        )}
-      </div>
+      <h3>
+        {tr.pipelineTask} <StatusBadge status={tr.status} label={tr.reason || tr.status || tr.observation} />{" "}
+        <span className="muted small">
+          {tr.task && <>task {tr.task} · </>}
+          <code>{tr.name}</code> · <Duration seconds={seconds(tr.startTime, tr.completionTime)} />
+        </span>
+      </h3>
       {tr.message && <p className="muted small">{tr.message}</p>}
       <table className="list">
         <thead>
@@ -192,21 +185,39 @@ function TaskRun({ buildId, tr, logs, onLogs }: { buildId: string; tr: TaskRunVi
             <th>State</th>
             <th>Exit code</th>
             <th>Duration</th>
+            <th>Log</th>
           </tr>
         </thead>
         <tbody>
-          {tr.steps.map((s) => (
-            <tr key={s.name}>
-              <td>{s.name}</td>
-              <td>
-                <StatusBadge status={s.exitCode === null ? s.state : s.exitCode === 0 ? "SUCCEEDED" : "FAILED"} label={s.reason || s.state} />
-              </td>
-              <td>{s.exitCode ?? "—"}</td>
-              <td>
-                <Duration seconds={seconds(s.startedAt, s.finishedAt)} />
-              </td>
-            </tr>
-          ))}
+          {tr.steps.map((s) => {
+            const key = `${tr.name}/${s.name}`;
+            return (
+              <Fragment key={s.name}>
+                <tr>
+                  <td>{s.name}</td>
+                  <td>
+                    <StatusBadge status={s.exitCode === null ? s.state : s.exitCode === 0 ? "SUCCEEDED" : "FAILED"} label={s.reason || s.state} />
+                  </td>
+                  <td>{s.exitCode ?? "—"}</td>
+                  <td>
+                    <Duration seconds={seconds(s.startedAt, s.finishedAt)} />
+                  </td>
+                  <td>
+                    <button type="button" className="link-button" aria-expanded={open === key} onClick={() => onLog(key)}>
+                      {open === key ? "hide log" : "view log"}
+                    </button>
+                  </td>
+                </tr>
+                {open === key && (
+                  <tr className="step-log">
+                    <td colSpan={5}>
+                      <LogViewer buildId={buildId} taskRun={tr.name} step={s.name} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
       {tr.results.length > 0 && (
@@ -219,13 +230,6 @@ function TaskRun({ buildId, tr, logs, onLogs }: { buildId: string; tr: TaskRunVi
           ))}
         </p>
       )}
-      {logs &&
-        tr.steps.map((s) => (
-          <div key={s.name} className="step-log">
-            <h4>{s.name}</h4>
-            <LogViewer buildId={buildId} taskRun={tr.name} step={s.name} />
-          </div>
-        ))}
     </div>
   );
 }

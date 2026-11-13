@@ -13,14 +13,9 @@ export function Images({ appId, appName }: { appId: string; appName: string }) {
           <ul className="cards">
             {d.images.map((i) => (
               <li key={i.digest + i.buildId} className="card">
-                <div className="card-title">
-                  <span>
-                    Image of {appName} <Head12 revision={i.sourceRevision} head12={i.head12} />
-                  </span>
-                  <span className="muted small">
-                    built <Time at={i.builtAt} />
-                  </span>
-                </div>
+                <h3 className="card-heading">
+                  Image of {appName} <Head12 revision={i.sourceRevision} head12={i.head12} />
+                </h3>
                 <dl>
                   {/* The registry repository is named by the Application's id
                       (Decision 0056 §8), never by its name. */}
@@ -46,6 +41,12 @@ export function Images({ appId, appName }: { appId: string; appName: string }) {
                     <dt>Pinned</dt>
                     <dd>
                       <Copy text={i.pinnedReference} label="repository@digest" />
+                    </dd>
+                  </div>
+                  <div className="field">
+                    <dt>Built</dt>
+                    <dd>
+                      <Time at={i.builtAt} />
                     </dd>
                   </div>
                   <div className="field">

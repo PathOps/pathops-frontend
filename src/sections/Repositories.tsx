@@ -13,11 +13,11 @@ export function RepositoriesSection({ appId }: { appId: string }) {
           <ul className="cards">
             {d.repositories.map((repo) => (
               <li key={repo.role} className="card">
-                <div className="card-title">
-                  <span className="role">{roles[repo.role] ?? repo.role}</span>
-                  {repo.url ? <ExternalLink href={repo.url}>{repo.fullName}</ExternalLink> : <span>{repo.fullName}</span>}
-                </div>
+                <h3 className="card-heading">{roles[repo.role] ?? repo.role}</h3>
                 <dl>
+                  <Field label="Repository">
+                    {repo.url ? <ExternalLink href={repo.url}>{repo.fullName}</ExternalLink> : <span>{repo.fullName}</span>}
+                  </Field>
                   <Field label="Default branch">{repo.defaultBranch}</Field>
                   <Field label="Initial commit">
                     <Head12 revision={repo.initialCommit} />

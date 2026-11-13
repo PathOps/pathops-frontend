@@ -184,18 +184,6 @@ button {
 .card p {
   margin: 0.3rem 0;
 }
-.card-title {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 600;
-  flex-wrap: wrap;
-}
-.role {
-  color: var(--muted);
-  font-weight: 500;
-}
 
 .grid {
   display: grid;
@@ -383,15 +371,8 @@ th {
 .taskrun {
   margin-bottom: 12px;
 }
-.taskrun-head {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  justify-content: space-between;
-}
-.step-log h4 {
-  margin: 12px 0 4px;
-  font-size: 0.9rem;
+.step-log > td {
+  padding: 0 8px 10px;
 }
 
 .tree,

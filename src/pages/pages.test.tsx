@@ -97,7 +97,7 @@ describe("Application", () => {
 
   it("lists the three repositories with their links, and no invented metadata", async () => {
     renderAt(`/applications/${f.appId}/repositories`, fakeApi(all));
-    expect(await screen.findByText("Source")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Source" })).toBeInTheDocument();
     expect(screen.getByText("Preflight GitOps")).toBeInTheDocument();
     expect(screen.getByText("Production GitOps")).toBeInTheDocument();
     expect(screen.getAllByText("Repository metadata — coming later")).toHaveLength(3);
@@ -150,7 +150,7 @@ describe("Delivery run", () => {
     expect(tl).not.toHaveTextContent("sha256:");
   });
 
-  it("opens a failed step as its build tree, with one TaskRun's logs open at a time", async () => {
+  it("opens a failed step as its build tree, with one step's log open at a time under its step", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
     const tree = await screen.findByRole("list", { name: "Build tree" });
     expect(tree).toHaveTextContent("PipelineRun manual-web-ci/build-b");
@@ -158,13 +158,15 @@ describe("Delivery run", () => {
     expect(within(tree).getByRole("link", { name: "build-bad" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-bad`);
     const lint = await within(tree).findByLabelText("TaskRun lint");
     const image = within(tree).getByLabelText("TaskRun build-image");
-    await userEvent.click(within(image).getByRole("button", { name: "View logs" }));
-    expect(await within(image).findByText("ERROR: failed to solve")).toBeInTheDocument();
-    expect(within(image).getByText("image checkout ok")).toBeInTheDocument();
-    await userEvent.click(within(lint).getByRole("button", { name: "View logs" }));
+    await userEvent.click(within(image).getAllByRole("button", { name: "view log" })[1]);
+    const log = await within(image).findByLabelText("Log of build");
+    expect(log).toHaveTextContent("ERROR: failed to solve");
+    // The log is the row right under its step's row.
+    const stepRow = within(image).getByRole("cell", { name: "build" }).closest("tr")!;
+    expect(stepRow.nextElementSibling).toContainElement(log);
+    await userEvent.click(within(lint).getByRole("button", { name: "view log" }));
     expect(await within(lint).findByText("lint checkout ok")).toBeInTheDocument();
-    expect(within(image).queryByText("ERROR: failed to solve")).toBeNull();
-    expect(within(image).getByRole("button", { name: "View logs" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(image).queryByLabelText("Log of build")).toBeNull();
   });
 
   it("renders the steps the Tenant CP returns, including types it does not know yet", async () => {
@@ -201,7 +203,7 @@ describe("Build", () => {
     const tasks = await screen.findByRole("region", { name: "TaskRuns" });
     await waitFor(() => expect(tasks).toHaveTextContent("build-image"));
     for (const step of ["checkout", "build", "push"]) expect(within(tasks).getByText(step)).toBeInTheDocument();
-    await userEvent.click(within(tasks).getByRole("button", { name: "View logs" }));
+    await userEvent.click(within(tasks).getAllByRole("button", { name: "view log" })[1]);
     const log = await screen.findByLabelText("Log of build");
     expect(log).toHaveTextContent("exporting to oci image format");
     expect(log).toHaveTextContent("Truncated: the last 4000 lines, at most 256 KiB.");
