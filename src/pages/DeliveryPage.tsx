@@ -104,7 +104,7 @@ function Steps({ appId, steps }: { appId: string; steps: DeliveryStep[] }) {
                 {open && (
                   <tr>
                     <td />
-                    <td colSpan={6}>
+                    <td colSpan={6} className="detail">
                       {s.externalRef && (
                         <p>
                           Execution <code>{s.externalRef}</code>

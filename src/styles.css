@@ -117,6 +117,16 @@ pre {
   font-family: ui-monospace, monospace;
   font-size: 0.875rem;
 }
+/* Long unbroken values (PipelineRun names, errors, log lines) wrap instead
+   of widening their table past the page. */
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.error,
+.detail {
+  overflow-wrap: anywhere;
+}
 button {
   cursor: pointer;
   font: inherit;
