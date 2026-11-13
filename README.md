@@ -61,10 +61,15 @@ Application (`#N`, from the Tenant Control Plane).
   latest first (a new step type appears without a UI change), and the OCI
   image (or "No image"). A step's details are its build tree: Build ->
   PipelineRun -> TaskRuns -> steps; a failed step starts open.
-- **Build**: its facts and delivery run, the PipelineRun's status and results,
-  its TaskRuns and their steps. Each step's log (the last 4000 lines, at most
+- **Build**: its facts (Build ID first) and delivery, the PipelineRun's status
+  and results, its TaskRuns (each a facts table) and their steps. Each step's log (the last 4000 lines, at most
   256 KiB, as the Tenant Control Plane bounds it; not streamed) opens in the
   row under the step, one at a time.
+
+Repository links open through Forgejo's sign-in
+(`/user/login?redirect_to=<path>`), which goes to Dex and lands on the
+repository: Forgejo answers 404 for a private repository to a browser not
+signed in to it.
 
 Running deliveries and builds are read again every 5 s while they run, and
 every view has Refresh. There is no push channel yet (no SSE, no WebSocket).

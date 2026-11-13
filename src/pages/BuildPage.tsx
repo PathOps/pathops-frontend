@@ -14,6 +14,7 @@ import {
   RunLink,
   Status,
   Time,
+  Toolbar,
   newestFirst,
   seconds,
 } from "../components/ui";
@@ -45,10 +46,11 @@ export function BuildPage() {
         {(d) => (
           <>
             <h1>Build #{d.number}</h1>
-            <p>
-              <RefreshButton resource={b} />
-            </p>
+            <Toolbar actions={<RefreshButton resource={b} />} />
             <Facts label="Build">
+              <Fact label="Build ID">
+                <code>{d.id}</code>
+              </Fact>
               <Fact label="Status">
                 <Status status={d.status} />
               </Fact>
@@ -60,7 +62,7 @@ export function BuildPage() {
               <Fact label="Commit">
                 <Copy text={d.sourceRevision} />
               </Fact>
-              <Fact label="Delivery run">
+              <Fact label="Delivery">
                 <RunLink appId={appId} id={d.deliveryRunId} number={d.deliveryNumber} />
               </Fact>
               <Fact label="Started">
@@ -79,9 +81,6 @@ export function BuildPage() {
                 </Fact>
               )}
               <Fact label="Trigger event">{d.triggerEventId ?? <span className="muted">—</span>}</Fact>
-              <Fact label="Build ID">
-                <code>{d.id}</code>
-              </Fact>
             </Facts>
             <h2>PipelineRun</h2>
             <PipelineRunFacts build={d} />
@@ -164,13 +163,19 @@ function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunVie
       <h3>
         {tr.pipelineTask} — <Status status={tr.status} label={tr.reason || tr.status || tr.observation} />
       </h3>
-      <p>
-        <small>
-          TaskRun <code>{tr.name}</code>
-          {tr.task && <> · task {tr.task}</>} · <Duration seconds={seconds(tr.startTime, tr.completionTime)} />
-          {tr.message && <> · {tr.message}</>}
-        </small>
-      </p>
+      <Facts label={`TaskRun ${tr.pipelineTask} facts`}>
+        <Fact label="TaskRun">
+          <code>{tr.name}</code>
+        </Fact>
+        {tr.task && <Fact label="Task">{tr.task}</Fact>}
+        <Fact label="Started">
+          <Time at={tr.startTime} />
+        </Fact>
+        <Fact label="Duration">
+          <Duration seconds={seconds(tr.startTime, tr.completionTime)} />
+        </Fact>
+        {tr.message && <Fact label="Message">{tr.message}</Fact>}
+      </Facts>
       <div className="scroll">
         <table>
           <thead>
@@ -215,18 +220,6 @@ function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunVie
           </tbody>
         </table>
       </div>
-      {tr.results.length > 0 && (
-        <p>
-          <small>
-            Results:{" "}
-            {tr.results.map((r) => (
-              <Fragment key={r.name}>
-                {r.name}=<code>{r.value}</code>{" "}
-              </Fragment>
-            ))}
-          </small>
-        </p>
-      )}
     </div>
   );
 }

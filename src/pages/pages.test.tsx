@@ -113,10 +113,10 @@ describe("Application", () => {
     expect(table).toHaveTextContent("conflict: alice/manual-web exists");
   });
 
-  it("lists the three repositories with their links", async () => {
+  it("lists the three repositories, linked through Forgejo's sign-in", async () => {
     renderAt(`/applications/${f.appId}/repositories`, fakeApi(all));
     const src = await screen.findByRole("link", { name: "alice/manual-web ↗" });
-    expect(src).toHaveAttribute("href", "https://forgejo-canary.demo.pathops.io/alice/manual-web");
+    expect(src).toHaveAttribute("href", "https://forgejo-canary.demo.pathops.io/user/login?redirect_to=%2Falice%2Fmanual-web");
     expect(src).toHaveAttribute("rel", "noopener noreferrer");
     expect(screen.getByRole("link", { name: "alice/manual-web-gitops-production ↗" })).toBeInTheDocument();
     expect(screen.getByText("gitops-preflight")).toBeInTheDocument();
@@ -221,12 +221,17 @@ describe("Build", () => {
     renderAt(`/applications/${f.appId}/builds/build-ok`, fakeApi(all));
     expect(await screen.findByRole("heading", { level: 1, name: "Build #1" })).toBeInTheDocument();
     const facts = screen.getByRole("table", { name: "Build" });
-    expect(within(facts).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    expect(within(facts).getAllByRole("rowheader")[0]).toHaveTextContent("Build ID");
+    const delivery = within(facts).getByRole("row", { name: /^Delivery/ });
+    expect(within(delivery).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
     const pr = screen.getByRole("table", { name: "PipelineRun" });
     expect(pr).toHaveTextContent("manual-web-ci/build-build-ok");
     expect(pr).toHaveTextContent("imageDigest");
     const tasks = await screen.findByRole("region", { name: "TaskRuns" });
     await waitFor(() => expect(tasks).toHaveTextContent("build-image"));
+    const tr = within(tasks).getByRole("table", { name: "TaskRun build-image facts" });
+    expect(tr).toHaveTextContent("build-build-ok-build-image");
+    expect(tasks).not.toHaveTextContent("Results:");
     for (const step of ["checkout", "build", "push"]) expect(within(tasks).getByText(step)).toBeInTheDocument();
     await userEvent.click(within(tasks).getAllByRole("button", { name: "View log" })[1]);
     const log = await screen.findByRole("log", { name: "Log of build" });

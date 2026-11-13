@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import type { ApplicationSummary, Technology } from "../api/types";
 import { useResource } from "../api/useResource";
 import { Page } from "../components/Page";
-import { Loaded, RefreshButton, RunLink, Status, Time } from "../components/ui";
+import { Loaded, RefreshButton, RunLink, Status, Time, Toolbar } from "../components/ui";
 
 export function technologyLine(t: Technology | null): string {
   if (!t) return "Technology not declared";
@@ -15,9 +15,7 @@ export function ApplicationsPage() {
   return (
     <Page>
       <h1>Applications</h1>
-      <p>
-        <RefreshButton resource={apps} />
-      </p>
+      <Toolbar actions={<RefreshButton resource={apps} />} />
       <Loaded resource={apps} empty={(d) => d.applications.length === 0}>
         {(d) => (
           <div className="scroll">

@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import type { Provisioning, ProvisioningStep } from "../api/types";
 import { running, useResource } from "../api/useResource";
-import { Duration, Loaded, RefreshButton, Status, Time, humanize, newestFirst, seconds } from "../components/ui";
+import { Duration, Loaded, RefreshButton, Status, Time, Toolbar, humanize, newestFirst, seconds } from "../components/ui";
 
 // A step's span: its first attempt's start to its last attempt's end.
 function span(s: ProvisioningStep): { start: string | null; end: string | null } {
@@ -18,10 +18,10 @@ export function ProvisioningSection({ appId }: { appId: string }) {
       <Loaded resource={p}>
         {(d) => (
           <>
-            <p>
+            <Toolbar actions={<RefreshButton resource={p} />}>
               Steps executed when creating the application: <Status status={d.run.status} />, completed{" "}
-              <Time at={d.run.completedAt} />. <RefreshButton resource={p} />
-            </p>
+              <Time at={d.run.completedAt} />.
+            </Toolbar>
             <div className="scroll">
               <table aria-label="Provisioning steps">
                 <thead>

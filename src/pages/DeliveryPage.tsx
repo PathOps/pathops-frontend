@@ -13,6 +13,7 @@ import {
   RefreshButton,
   Status,
   Time,
+  Toolbar,
   humanize,
   newestFirst,
 } from "../components/ui";
@@ -155,9 +156,7 @@ export function DeliveryPage() {
         {(d) => (
           <>
             <h1>Delivery #{d.number}</h1>
-            <p>
-              <RefreshButton resource={r} />
-            </p>
+            <Toolbar actions={<RefreshButton resource={r} />} />
             <Facts label="Delivery run">
               <Fact label="Status">
                 <Status status={d.status} />
