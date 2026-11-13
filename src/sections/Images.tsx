@@ -19,14 +19,14 @@ export function Images({ appId }: { appId: string }) {
                     <th>Digest</th>
                     <th>Build</th>
                     <th>Created</th>
-                    <th>Reference</th>
                   </tr>
                 </thead>
                 <tbody>
                   {d.images.map((i) => (
                     <tr key={i.digest + i.buildId}>
                       <td>
-                        <code>{i.revision}</code>
+                        {/* Copies the reference a manifest pins: repository@digest. */}
+                        <code>{i.revision}</code> <CopyButton text={i.pinnedReference} />
                       </td>
                       <td>
                         <Short text={i.digest} />
@@ -36,10 +36,6 @@ export function Images({ appId }: { appId: string }) {
                       </td>
                       <td>
                         <Time at={i.builtAt} />
-                      </td>
-                      <td>
-                        {/* The reference a manifest pins: repository@digest. */}
-                        <CopyButton text={i.pinnedReference} />
                       </td>
                     </tr>
                   ))}

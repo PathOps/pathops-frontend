@@ -49,12 +49,14 @@ Application (`#N`, from the Tenant Control Plane).
   (an open link and the current version's deploy time; "not deployed" until
   the Tenant Control Plane records environment deploys).
 - **Application**: the Application ID, a summary (technology, template link,
-  last delivery, provisioning; Production and Preflight under construction)
+  last delivery, provisioning; Production and Preflight "not created yet")
   and the tabs Production, Preflight, Delivery, Validations, Images, Builds,
   Repositories, Provisioning. Images copy each image's pinned reference
-  (`repository@digest`, what a manifest uses). Production, Preflight and Validations are
-  marked "Under construction" until their slices ship; the others appear when
-  the Tenant Control Plane names them (`overview.sections`).
+  (`repository@digest`, what a manifest uses) beside its tag. Production and
+  Preflight say their environment has not been created yet, Validations that
+  there are none, until their slices ship (an Application whose provisioning
+  stopped half-way has none either); the others appear when the Tenant
+  Control Plane names them (`overview.sections`).
 - **Delivery run**: its facts (commit, source, times, error), its DeliverySteps
   latest first (a new step type appears without a UI change), and the OCI
   image (or "No image"). A step's details are its build tree: Build ->

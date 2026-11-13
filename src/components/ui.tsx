@@ -186,15 +186,24 @@ export function Fact({ label, children }: { label: string; children: ReactNode }
   );
 }
 
-// UnderConstruction marks a section whose delivery slice is not built yet.
-export function UnderConstruction({ title, what }: { title: string; what: string }) {
+// Toolbar is a line of text with its actions (Refresh) on the right.
+export function Toolbar({ children, actions }: { children?: ReactNode; actions: ReactNode }) {
+  return (
+    <div className="toolbar">
+      <span>{children}</span>
+      <span>{actions}</span>
+    </div>
+  );
+}
+
+// NotYet is a section with nothing in it yet: what it holds, and why it is
+// empty.
+export function NotYet({ title, what, state }: { title: string; what: string; state: string }) {
   return (
     <>
       <h2>{title}</h2>
       <p>{what}</p>
-      <p>
-        <strong className="status-warning">Under construction</strong> — this section arrives with a later PathOps slice.
-      </p>
+      <p className="muted">{state}</p>
     </>
   );
 }

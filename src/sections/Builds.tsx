@@ -1,6 +1,6 @@
 import type { BuildSummary } from "../api/types";
 import { running, useResource } from "../api/useResource";
-import { BuildLink, Duration, Head12, Loaded, RefreshButton, RunLink, Status, Time } from "../components/ui";
+import { BuildLink, Duration, Head12, Loaded, RefreshButton, RunLink, Status, Time, Toolbar } from "../components/ui";
 
 export function Builds({ appId }: { appId: string }) {
   const b = useResource<{ builds: BuildSummary[] }>(`/api/v1/applications/${appId}/builds`, {
@@ -9,9 +9,7 @@ export function Builds({ appId }: { appId: string }) {
   return (
     <>
       <h2>Builds</h2>
-      <p>
-        <RefreshButton resource={b} />
-      </p>
+      <Toolbar actions={<RefreshButton resource={b} />}>Each build turns a commit into an OCI image, as part of a delivery.</Toolbar>
       <Loaded resource={b} empty={(d) => d.builds.length === 0}>
         {(d) => (
           <div className="scroll">

@@ -63,7 +63,7 @@ describe("Applications", () => {
 });
 
 describe("Application", () => {
-  it("has a summary and the tabs, the planned ones under construction", async () => {
+  it("has a summary and the tabs, the planned ones saying they have nothing yet", async () => {
     renderAt(`/applications/${f.appId}/deliveries`, fakeApi(all));
     const tabs = await screen.findByRole("navigation", { name: "Application sections" });
     expect(within(tabs).getAllByRole("link").map((l) => l.textContent)).toEqual([
@@ -82,11 +82,15 @@ describe("Application", () => {
     expect(within(summary).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
     expect(summary).toHaveTextContent("Production");
     expect(screen.getByText(f.appId)).toBeInTheDocument();
-    for (const planned of ["Production", "Preflight", "Validations"]) {
+    for (const [planned, state] of [
+      ["Production", "The production environment has not been created yet."],
+      ["Preflight", "The preflight environment has not been created yet."],
+      ["Validations", "No validations yet."],
+    ]) {
       await userEvent.click(within(tabs).getByRole("link", { name: planned }));
       const section = await screen.findByRole("region", { name: planned });
       expect(within(section).getByRole("heading", { level: 2, name: planned })).toBeInTheDocument();
-      expect(within(section).getByText("Under construction")).toBeInTheDocument();
+      expect(within(section).getByText(state)).toBeInTheDocument();
     }
   });
 
@@ -249,5 +253,14 @@ describe("Theme", () => {
     const after = document.documentElement.dataset.theme;
     expect(after).not.toEqual(before);
     expect(localStorage.getItem("pathops-theme")).toEqual(after);
+  });
+
+  it("sits first in the header, before the user and sign out, with no Cell", async () => {
+    const me = { subject: "s", email: "alice@example.test", issuer: "https://dex", cellId: "canary" };
+    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/me": me }));
+    const header = screen.getByRole("banner");
+    await within(header).findByText("alice@example.test");
+    expect(header.textContent).toMatch(/mode\s*alice@example\.test\s*Sign out$/);
+    expect(header).not.toHaveTextContent("canary");
   });
 });

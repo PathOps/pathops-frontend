@@ -1,6 +1,6 @@
 import type { DeliverySummary } from "../api/types";
 import { running, useResource } from "../api/useResource";
-import { Duration, Head12, Loaded, RefreshButton, RunLink, Status, Time } from "../components/ui";
+import { Duration, Head12, Loaded, RefreshButton, RunLink, Status, Time, Toolbar } from "../components/ui";
 
 export function Deliveries({ appId }: { appId: string }) {
   const r = useResource<{ deliveries: DeliverySummary[] }>(`/api/v1/applications/${appId}/deliveries`, {
@@ -9,9 +9,9 @@ export function Deliveries({ appId }: { appId: string }) {
   return (
     <>
       <h2>Delivery Runs</h2>
-      <p>
-        Each delivery represents a tracked execution through build, validation and deployment. <RefreshButton resource={r} />
-      </p>
+      <Toolbar actions={<RefreshButton resource={r} />}>
+        Each delivery represents a tracked execution through build, validation and deployment.
+      </Toolbar>
       <Loaded resource={r} empty={(d) => d.deliveries.length === 0}>
         {(d) => (
           <div className="scroll">

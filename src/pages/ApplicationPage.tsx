@@ -2,7 +2,7 @@ import { NavLink, Navigate, useParams } from "react-router-dom";
 import type { Overview } from "../api/types";
 import { useResource } from "../api/useResource";
 import { Page } from "../components/Page";
-import { Copy, ExternalLink, Loaded, RefreshButton, RunLink, Status, UnderConstruction } from "../components/ui";
+import { Copy, ExternalLink, Loaded, NotYet, RefreshButton, RunLink, Status, Toolbar } from "../components/ui";
 import { Builds } from "../sections/Builds";
 import { Deliveries } from "../sections/Deliveries";
 import { Images } from "../sections/Images";
@@ -12,8 +12,9 @@ import { technologyLine } from "./ApplicationsPage";
 
 interface Section {
   title: string;
-  // planned: shown as under construction until its slice ships; else the
-  // Tenant CP names it in overview.sections when it exists.
+  // planned: always shown, empty until its slice ships (the Tenant CP has no
+  // environment or validation yet); else the Tenant CP names it in
+  // overview.sections when it exists.
   planned?: boolean;
   render: (appId: string, o: Overview) => JSX.Element;
 }
@@ -23,19 +24,35 @@ const sections: Record<string, Section> = {
   production: {
     title: "Production",
     planned: true,
-    render: () => <UnderConstruction title="Production" what="Current deployment status and runtime information." />,
+    render: () => (
+      <NotYet
+        title="Production"
+        what="Current deployment status and runtime information."
+        state="The production environment has not been created yet."
+      />
+    ),
   },
   preflight: {
     title: "Preflight",
     planned: true,
-    render: () => <UnderConstruction title="Preflight" what="Validation environment before production delivery." />,
+    render: () => (
+      <NotYet
+        title="Preflight"
+        what="Validation environment before production delivery."
+        state="The preflight environment has not been created yet."
+      />
+    ),
   },
   deliveries: { title: "Delivery", render: (id) => <Deliveries appId={id} /> },
   validations: {
     title: "Validations",
     planned: true,
     render: () => (
-      <UnderConstruction title="Validations" what="Acceptance and regression test executions for the application contract." />
+      <NotYet
+        title="Validations"
+        what="Acceptance and regression test executions for the application contract."
+        state="No validations yet."
+      />
     ),
   },
   images: { title: "Images", render: (id) => <Images appId={id} /> },
@@ -74,11 +91,11 @@ function Summary({ o }: { o: Overview }) {
         <tr>
           <th scope="row">Production</th>
           <td>
-            <span className="muted">Under construction</span>
+            <span className="muted">not created yet</span>
           </td>
           <th scope="row">Preflight</th>
           <td>
-            <span className="muted">Under construction</span>
+            <span className="muted">not created yet</span>
           </td>
         </tr>
       </tbody>
@@ -98,9 +115,9 @@ export function ApplicationPage() {
           return (
             <>
               <h1>{o.name}</h1>
-              <p>
-                Application ID: <Copy text={o.id} /> <RefreshButton resource={overview} />
-              </p>
+              <Toolbar actions={<RefreshButton resource={overview} />}>
+                Application ID: <Copy text={o.id} />
+              </Toolbar>
               <Summary o={o} />
               <nav className="tabs" aria-label="Application sections">
                 {available.map((s) => (

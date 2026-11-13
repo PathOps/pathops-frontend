@@ -48,7 +48,7 @@ function ThemeToggle() {
 }
 
 // Page is a page of the signed-in UI: the breadcrumb (PathOps / Applications
-// / ... / here), the user, then the content.
+// / ... / here), the theme, the user and sign out, then the content.
 export function Page({ crumbs, children }: { crumbs?: ReactNode; children: ReactNode }) {
   const me = useResource<Me>("/api/v1/me");
   const [out, setOut] = useState(false);
@@ -60,11 +60,8 @@ export function Page({ crumbs, children }: { crumbs?: ReactNode; children: React
           {crumbs}
         </nav>
         <span className="spacer" />
-        {me.data && (
-          <small>
-            {me.data.email ?? me.data.name ?? me.data.subject} · Cell {me.data.cellId}
-          </small>
-        )}
+        <ThemeToggle />
+        {me.data && <small>{me.data.email ?? me.data.name ?? me.data.subject}</small>}
         <button
           type="button"
           onClick={() => {
@@ -74,7 +71,6 @@ export function Page({ crumbs, children }: { crumbs?: ReactNode; children: React
         >
           Sign out
         </button>
-        <ThemeToggle />
         {out && <Navigate to="/signed-out" replace />}
       </header>
       <main>{children}</main>
