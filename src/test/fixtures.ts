@@ -251,3 +251,46 @@ export const images: { images: ImageEntry[] } = {
     },
   ],
 };
+
+// A failed build: lint passed, build-image failed in its build step.
+export const buildBad: BuildDetail = {
+  ...buildOk,
+  id: "build-bad",
+  deliveryRunId: "run-bad",
+  status: "FAILED",
+  image: null,
+  sanitizedError: "the PipelineRun manual-web-ci/build-b failed (Failed)",
+  pipelineRun: { namespace: "manual-web-ci", name: "build-b" },
+  pipelineRunStatus: {
+    status: "False",
+    reason: "Failed",
+    message: "Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0",
+    startTime: t0,
+    completionTime: t1,
+    results: [],
+    taskRuns: [
+      { name: "build-b-lint", pipelineTask: "lint" },
+      { name: "build-b-build-image", pipelineTask: "build-image" },
+    ],
+  },
+};
+
+export const tasksBad: Tasks = {
+  buildId: "build-bad",
+  observation: "observed",
+  taskRuns: [
+    { ...tasksOk.taskRuns[0], name: "build-b-lint", pipelineTask: "lint", task: "lint", steps: [tasksOk.taskRuns[0].steps[0]], results: [] },
+    {
+      ...tasksOk.taskRuns[0],
+      name: "build-b-build-image",
+      status: "False",
+      reason: "Failed",
+      steps: [tasksOk.taskRuns[0].steps[0], { ...tasksOk.taskRuns[0].steps[1], reason: "Error", exitCode: 1 }],
+      results: [],
+    },
+  ],
+};
+
+export function logOf(taskRun: string, step: string, content: string): Log {
+  return { buildId: "build-bad", taskRun, step, content, truncated: false, limitBytes: 262144, tailLines: 4000 };
+}

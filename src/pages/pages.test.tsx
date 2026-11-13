@@ -19,7 +19,14 @@ const all = {
   [`${app}/builds`]: { builds: [] },
   "/api/v1/builds/build-ok": f.buildOk,
   "/api/v1/builds/build-ok/tasks": f.tasksOk,
+  "/api/v1/builds/build-ok/tasks/build-build-ok-build-image/logs?step=checkout": { ...f.buildLog, step: "checkout", content: "cloned" },
   "/api/v1/builds/build-ok/tasks/build-build-ok-build-image/logs?step=build": f.buildLog,
+  "/api/v1/builds/build-ok/tasks/build-build-ok-build-image/logs?step=push": { ...f.buildLog, step: "push", content: "pushed" },
+  "/api/v1/builds/build-bad": f.buildBad,
+  "/api/v1/builds/build-bad/tasks": f.tasksBad,
+  "/api/v1/builds/build-bad/tasks/build-b-lint/logs?step=checkout": f.logOf("build-b-lint", "checkout", "lint checkout ok"),
+  "/api/v1/builds/build-bad/tasks/build-b-build-image/logs?step=checkout": f.logOf("build-b-build-image", "checkout", "image checkout ok"),
+  "/api/v1/builds/build-bad/tasks/build-b-build-image/logs?step=build": f.logOf("build-b-build-image", "build", "ERROR: failed to solve"),
 };
 
 describe("Applications", () => {
@@ -119,25 +126,43 @@ describe("Delivery run", () => {
   it("shows a succeeded run as commit -> push -> steps -> image with its digest", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
     const tl = await screen.findByRole("list", { name: "Delivery timeline" });
-    const nodes = within(tl).getAllByRole("listitem");
+    const nodes = Array.from(tl.children) as HTMLElement[];
     expect(nodes.map((n) => n.dataset.kind)).toEqual(["commit", "event", "step", "output"]);
     expect(nodes[2]).toHaveTextContent("Build application");
     expect(nodes[3]).toHaveTextContent("OCI image 274af150e590");
     await userEvent.click(within(nodes[3]).getByRole("button"));
     expect(nodes[3]).toHaveTextContent(f.digest);
     await userEvent.click(within(nodes[2]).getByRole("button"));
-    expect(within(nodes[2]).getByRole("link")).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
+    expect(within(nodes[2]).getByRole("link", { name: "build-ok" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
+    expect(within(nodes[2]).queryByRole("list", { name: "Build tree" })).toBeNull();
   });
 
   it("shows a failed run's error at the run and the step, and no image", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
     const tl = await screen.findByRole("list", { name: "Delivery timeline" });
     expect(screen.getByRole("alert")).toHaveTextContent("BUILD_APPLICATION: the PipelineRun manual-web-ci/build-b failed (Failed)");
-    const nodes = within(tl).getAllByRole("listitem");
+    const nodes = Array.from(tl.children) as HTMLElement[];
     expect(nodes[2]).toHaveTextContent("the PipelineRun manual-web-ci/build-b failed (Failed)");
     expect(nodes[3]).toHaveTextContent("No image");
     expect(tl).not.toHaveTextContent("OCI image");
     expect(tl).not.toHaveTextContent("sha256:");
+  });
+
+  it("opens a failed step as its build tree, with one TaskRun's logs open at a time", async () => {
+    renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
+    const tree = await screen.findByRole("list", { name: "Build tree" });
+    expect(tree).toHaveTextContent("PipelineRun manual-web-ci/build-b");
+    expect(tree).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
+    expect(within(tree).getByRole("link", { name: "build-bad" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-bad`);
+    const lint = await within(tree).findByLabelText("TaskRun lint");
+    const image = within(tree).getByLabelText("TaskRun build-image");
+    await userEvent.click(within(image).getByRole("button", { name: "View logs" }));
+    expect(await within(image).findByText("ERROR: failed to solve")).toBeInTheDocument();
+    expect(within(image).getByText("image checkout ok")).toBeInTheDocument();
+    await userEvent.click(within(lint).getByRole("button", { name: "View logs" }));
+    expect(await within(lint).findByText("lint checkout ok")).toBeInTheDocument();
+    expect(within(image).queryByText("ERROR: failed to solve")).toBeNull();
+    expect(within(image).getByRole("button", { name: "View logs" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("renders the steps the Tenant CP returns, including types it does not know yet", async () => {
@@ -153,7 +178,7 @@ describe("Delivery run", () => {
     };
     renderAt(`/applications/${f.appId}/deliveries/run-x`, fakeApi({ [`${app}/deliveries/run-x`]: future }));
     const tl = await screen.findByRole("list", { name: "Delivery timeline" });
-    const nodes = within(tl).getAllByRole("listitem");
+    const nodes = Array.from(tl.children) as HTMLElement[];
     expect(nodes.map((n) => n.textContent)).toEqual([
       expect.stringContaining("Commit"),
       expect.stringContaining("Push received"),
@@ -174,7 +199,7 @@ describe("Build", () => {
     const tasks = await screen.findByRole("region", { name: "TaskRuns" });
     await waitFor(() => expect(tasks).toHaveTextContent("build-image"));
     for (const step of ["checkout", "build", "push"]) expect(within(tasks).getByText(step)).toBeInTheDocument();
-    await userEvent.click(within(tasks).getAllByRole("button", { name: "view log" })[1]);
+    await userEvent.click(within(tasks).getByRole("button", { name: "View logs" }));
     const log = await screen.findByLabelText("Log of build");
     expect(log).toHaveTextContent("exporting to oci image format");
     expect(log).toHaveTextContent("Truncated: the last 4000 lines, at most 256 KiB.");

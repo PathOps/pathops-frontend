@@ -87,35 +87,7 @@ export function BuildPage() {
               </dl>
               <dl className="panel">
                 <h2>PipelineRun (Tekton)</h2>
-                {d.pipelineRunStatus ? (
-                  <>
-                    <Field label="Status">
-                      <StatusBadge status={d.pipelineRunStatus.status} label={d.pipelineRunStatus.reason || d.pipelineRunStatus.status} />
-                    </Field>
-                    {d.pipelineRunStatus.message && <Field label="Message">{d.pipelineRunStatus.message}</Field>}
-                    <Field label="Started">
-                      <Time at={d.pipelineRunStatus.startTime} />
-                    </Field>
-                    <Field label="Completed">
-                      <Time at={d.pipelineRunStatus.completionTime} />
-                    </Field>
-                    <Field label="Results">
-                      {d.pipelineRunStatus.results.length === 0 ? (
-                        <span className="muted">none</span>
-                      ) : (
-                        <ul className="plain">
-                          {d.pipelineRunStatus.results.map((r) => (
-                            <li key={r.name}>
-                              <span className="muted">{r.name}</span> <code className="small">{r.value}</code>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </Field>
-                  </>
-                ) : (
-                  <p className="muted">{observationText[d.observation] ?? d.observation}</p>
-                )}
+                <PipelineRunFields build={d} />
               </dl>
             </div>
             <TaskRuns buildId={d.id} buildRunning={running(d.status)} />
@@ -126,37 +98,92 @@ export function BuildPage() {
   );
 }
 
+// PipelineRunFields is what Tekton reports of a build's PipelineRun, or why
+// it cannot be read.
+export function PipelineRunFields({ build }: { build: BuildDetail }) {
+  const pr = build.pipelineRunStatus;
+  if (!pr) return <p className="muted">{observationText[build.observation] ?? build.observation}</p>;
+  return (
+    <>
+      <Field label="Status">
+        <StatusBadge status={pr.status} label={pr.reason || pr.status} />
+      </Field>
+      {pr.message && <Field label="Message">{pr.message}</Field>}
+      <Field label="Started">
+        <Time at={pr.startTime} />
+      </Field>
+      <Field label="Completed">
+        <Time at={pr.completionTime} />
+      </Field>
+      <Field label="Results">
+        {pr.results.length === 0 ? (
+          <span className="muted">none</span>
+        ) : (
+          <ul className="plain">
+            {pr.results.map((r) => (
+              <li key={r.name}>
+                <span className="muted">{r.name}</span> <code className="small">{r.value}</code>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Field>
+    </>
+  );
+}
+
 function TaskRuns({ buildId, buildRunning }: { buildId: string; buildRunning: boolean }) {
-  const t = useResource<Tasks>(`/api/v1/builds/${encodeURIComponent(buildId)}/tasks`, { pollWhile: () => buildRunning });
   return (
     <section aria-label="TaskRuns">
       <h2>TaskRuns</h2>
-      <Loaded resource={t}>
-        {(d) =>
-          d.observation !== "observed" ? (
-            <p className="muted">{observationText[d.observation] ?? d.observation}</p>
-          ) : d.taskRuns.length === 0 ? (
-            <p className="muted empty">No TaskRun yet.</p>
-          ) : (
-            d.taskRuns.map((tr) => <TaskRun key={tr.name} buildId={buildId} tr={tr} />)
-          )
-        }
-      </Loaded>
+      <TaskRunList buildId={buildId} buildRunning={buildRunning} />
     </section>
   );
 }
 
-function TaskRun({ buildId, tr }: { buildId: string; tr: TaskRunView }) {
-  const [log, setLog] = useState<string | null>(null);
+// TaskRunList is a build's TaskRuns with their steps. One TaskRun's logs are
+// open at a time, under that TaskRun.
+export function TaskRunList({ buildId, buildRunning }: { buildId: string; buildRunning: boolean }) {
+  const t = useResource<Tasks>(`/api/v1/builds/${encodeURIComponent(buildId)}/tasks`, { pollWhile: () => buildRunning });
+  const [open, setOpen] = useState<string | null>(null);
   return (
-    <div className="panel taskrun">
-      <h3>
-        {tr.pipelineTask} <StatusBadge status={tr.status} label={tr.reason || tr.status || tr.observation} />{" "}
-        <span className="muted small">
-          {tr.task && <>task {tr.task} · </>}
-          <code>{tr.name}</code> · <Duration seconds={seconds(tr.startTime, tr.completionTime)} />
-        </span>
-      </h3>
+    <Loaded resource={t}>
+      {(d) =>
+        d.observation !== "observed" ? (
+          <p className="muted">{observationText[d.observation] ?? d.observation}</p>
+        ) : d.taskRuns.length === 0 ? (
+          <p className="muted empty">No TaskRun yet.</p>
+        ) : (
+          <ul className="plain" aria-label="TaskRun list">
+            {d.taskRuns.map((tr) => (
+              <li key={tr.name}>
+                <TaskRun buildId={buildId} tr={tr} logs={open === tr.name} onLogs={() => setOpen(open === tr.name ? null : tr.name)} />
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </Loaded>
+  );
+}
+
+function TaskRun({ buildId, tr, logs, onLogs }: { buildId: string; tr: TaskRunView; logs: boolean; onLogs: () => void }) {
+  return (
+    <div className="panel taskrun" aria-label={`TaskRun ${tr.pipelineTask}`}>
+      <div className="taskrun-head">
+        <h3>
+          {tr.pipelineTask} <StatusBadge status={tr.status} label={tr.reason || tr.status || tr.observation} />{" "}
+          <span className="muted small">
+            {tr.task && <>task {tr.task} · </>}
+            <code>{tr.name}</code> · <Duration seconds={seconds(tr.startTime, tr.completionTime)} />
+          </span>
+        </h3>
+        {tr.steps.length > 0 && (
+          <button type="button" className="link-button" aria-expanded={logs} onClick={onLogs}>
+            {logs ? "Hide logs" : "View logs"}
+          </button>
+        )}
+      </div>
       {tr.message && <p className="muted small">{tr.message}</p>}
       <table className="list">
         <thead>
@@ -165,7 +192,6 @@ function TaskRun({ buildId, tr }: { buildId: string; tr: TaskRunView }) {
             <th>State</th>
             <th>Exit code</th>
             <th>Duration</th>
-            <th>Log</th>
           </tr>
         </thead>
         <tbody>
@@ -179,16 +205,10 @@ function TaskRun({ buildId, tr }: { buildId: string; tr: TaskRunView }) {
               <td>
                 <Duration seconds={seconds(s.startedAt, s.finishedAt)} />
               </td>
-              <td>
-                <button type="button" className="link-button" onClick={() => setLog(log === s.name ? null : s.name)}>
-                  {log === s.name ? "hide" : "view log"}
-                </button>
-              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {log && <LogViewer buildId={buildId} taskRun={tr.name} step={log} />}
       {tr.results.length > 0 && (
         <p className="small">
           Results:{" "}
@@ -199,6 +219,13 @@ function TaskRun({ buildId, tr }: { buildId: string; tr: TaskRunView }) {
           ))}
         </p>
       )}
+      {logs &&
+        tr.steps.map((s) => (
+          <div key={s.name} className="step-log">
+            <h4>{s.name}</h4>
+            <LogViewer buildId={buildId} taskRun={tr.name} step={s.name} />
+          </div>
+        ))}
     </div>
   );
 }

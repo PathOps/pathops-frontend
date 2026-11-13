@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { DeliveryDetail, DeliveryStep } from "../api/types";
+import type { BuildDetail, DeliveryDetail, DeliveryStep } from "../api/types";
 import { running, useResource } from "../api/useResource";
 import { Copy, Duration, Head12, Loaded, RefreshButton, StatusBadge, Time, humanize } from "../components/ui";
+import { PipelineRunFields, TaskRunList } from "./BuildPage";
 
 interface Node {
   key: string;
@@ -120,40 +121,87 @@ function stepNode(appId: string, s: DeliveryStep): Node {
       </>
     ),
     details: (
-      <dl>
-        <div className="field">
-          <dt>Started</dt>
-          <dd>
-            <Time at={s.startedAt} />
-          </dd>
-        </div>
-        <div className="field">
-          <dt>Completed</dt>
-          <dd>
-            <Time at={s.completedAt} />
-          </dd>
-        </div>
-        {s.externalRef && (
+      <>
+        <dl>
           <div className="field">
-            <dt>Execution</dt>
+            <dt>Started</dt>
             <dd>
-              <code className="small">{s.externalRef}</code>
+              <Time at={s.startedAt} />
             </dd>
           </div>
-        )}
-        {s.build && (
           <div className="field">
-            <dt>Build</dt>
+            <dt>Completed</dt>
             <dd>
-              <Link to={`/applications/${appId}/builds/${s.build.id}`}>
-                <StatusBadge status={s.build.status} label="Build, PipelineRun, TaskRuns and logs" />
-              </Link>
+              <Time at={s.completedAt} />
             </dd>
           </div>
-        )}
-      </dl>
+          {s.externalRef && (
+            <div className="field">
+              <dt>Execution</dt>
+              <dd>
+                <code className="small">{s.externalRef}</code>
+              </dd>
+            </div>
+          )}
+          {s.build && (
+            <div className="field">
+              <dt>Build</dt>
+              <dd>
+                <Link to={`/applications/${appId}/builds/${s.build.id}`}>
+                  <code>{s.build.id}</code>
+                </Link>{" "}
+                <StatusBadge status={s.build.status} />
+              </dd>
+            </div>
+          )}
+        </dl>
+        {s.build && s.status === "FAILED" && <BuildTree appId={appId} buildId={s.build.id} />}
+      </>
     ),
   };
+}
+
+// BuildTree is a failed step's build as a tree: the Build, its PipelineRun
+// and its TaskRuns, each with its logs.
+function BuildTree({ appId, buildId }: { appId: string; buildId: string }) {
+  const b = useResource<BuildDetail>(`/api/v1/builds/${encodeURIComponent(buildId)}`, { pollWhile: (d) => running(d.status) });
+  return (
+    <Loaded resource={b}>
+      {(d) => (
+        <ul className="tree" aria-label="Build tree">
+          <li>
+            <span className="tree-label">
+              Build{" "}
+              <Link to={`/applications/${appId}/builds/${d.id}`}>
+                <code>{d.id}</code>
+              </Link>{" "}
+              <StatusBadge status={d.status} />
+            </span>
+            {d.sanitizedError && <p className="error-text">{d.sanitizedError}</p>}
+            <ul>
+              <li>
+                <span className="tree-label">
+                  PipelineRun{" "}
+                  <code className="small">
+                    {d.pipelineRun.namespace}/{d.pipelineRun.name}
+                  </code>
+                </span>
+                <dl>
+                  <PipelineRunFields build={d} />
+                </dl>
+                <ul>
+                  <li>
+                    <span className="tree-label">TaskRuns</span>
+                    <TaskRunList buildId={d.id} buildRunning={running(d.status)} />
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      )}
+    </Loaded>
+  );
 }
 
 export function DeliveryPage() {
@@ -161,7 +209,8 @@ export function DeliveryPage() {
   const r = useResource<DeliveryDetail>(`/api/v1/applications/${encodeURIComponent(appId)}/deliveries/${encodeURIComponent(runId)}`, {
     pollWhile: (d) => running(d.status),
   });
-  const [open, setOpen] = useState<string | null>(null);
+  // A failed step starts open; a click toggles any node.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
   return (
     <main>
       <p className="crumbs">
@@ -181,16 +230,19 @@ export function DeliveryPage() {
             </p>
             {d.sanitizedError && <p className="error" role="alert">{d.sanitizedError}</p>}
             <ol className="timeline" aria-label="Delivery timeline">
-              {timeline(appId, d).map((n) => (
-                <li key={n.key} className={`tl-node tl-${n.kind}`} data-kind={n.kind}>
-                  <button type="button" className="tl-head" aria-expanded={open === n.key} onClick={() => setOpen(open === n.key ? null : n.key)}>
-                    <StatusBadge status={n.status} label="" />
-                    <span className="tl-title">{n.title}</span>
-                  </button>
-                  <div className="tl-summary">{n.summary}</div>
-                  {open === n.key && n.details && <div className="tl-details">{n.details}</div>}
-                </li>
-              ))}
+              {timeline(appId, d).map((n) => {
+                const open = toggled[n.key] ?? (n.kind === "step" && n.status === "FAILED");
+                return (
+                  <li key={n.key} className={`tl-node tl-${n.kind}`} data-kind={n.kind}>
+                    <button type="button" className="tl-head" aria-expanded={open} onClick={() => setToggled({ ...toggled, [n.key]: !open })}>
+                      <StatusBadge status={n.status} label="" />
+                      <span className="tl-title">{n.title}</span>
+                    </button>
+                    <div className="tl-summary">{n.summary}</div>
+                    {open && n.details && <div className="tl-details">{n.details}</div>}
+                  </li>
+                );
+              })}
             </ol>
           </>
         )}
