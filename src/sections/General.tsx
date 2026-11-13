@@ -24,14 +24,16 @@ export function General({ overview: o }: { overview: Overview }) {
         <Field label="Template">{o.template.id}</Field>
         <Field label="Revision">
           {o.template.revision ? (
-            <>
-              <Head12 revision={o.template.revision} />{" "}
-              {o.template.url && <ExternalLink href={o.template.url}>view the template at this revision</ExternalLink>}
-            </>
+            <Head12 revision={o.template.revision} />
           ) : (
             <span className="muted">not resolved yet</span>
           )}
         </Field>
+        {o.template.url && (
+          <Field label="Source">
+            <ExternalLink href={o.template.url}>{o.template.url}</ExternalLink>
+          </Field>
+        )}
         <Field label="Ref">{o.template.ref}</Field>
         {o.template.digest && (
           <Field label="Digest">

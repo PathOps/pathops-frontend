@@ -37,6 +37,12 @@ export function StatusBadge({ status, label }: { status: string | undefined; lab
   );
 }
 
+// newestFirst orders a sequence the Tenant CP returns in time order (steps,
+// attempts, TaskRuns) latest first: what happened last is on top.
+export function newestFirst<T>(xs: T[]): T[] {
+  return [...xs].reverse();
+}
+
 // humanize turns an enum (BUILD_APPLICATION, RUNNING) into words; unknown
 // values (future step types) render the same way, never hidden.
 export function humanize(s: string): string {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Provisioning } from "../api/types";
 import { running, useResource } from "../api/useResource";
-import { Loaded, RefreshButton, StatusBadge, Time, humanize } from "../components/ui";
+import { Loaded, RefreshButton, StatusBadge, Time, humanize, newestFirst } from "../components/ui";
 
 export function ProvisioningSection({ appId }: { appId: string }) {
   const p = useResource<Provisioning>(`/api/v1/applications/${appId}/provisioning`, {
@@ -22,7 +22,7 @@ export function ProvisioningSection({ appId }: { appId: string }) {
             {humanize(d.run.type)} · started <Time at={d.run.createdAt} /> · completed <Time at={d.run.completedAt} />
           </p>
           <ol className="steps">
-            {d.steps.map((s) => (
+            {newestFirst(d.steps).map((s) => (
               <li key={s.position} className={`step step-${s.status}`}>
                 <button type="button" className="step-head" aria-expanded={open === s.position}
                   onClick={() => setOpen(open === s.position ? null : s.position)}>
@@ -47,7 +47,7 @@ export function ProvisioningSection({ appId }: { appId: string }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {s.attempts.map((a) => (
+                      {newestFirst(s.attempts).map((a) => (
                         <tr key={a.number}>
                           <td>{a.number}</td>
                           <td>

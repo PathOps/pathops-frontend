@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { BuildDetail, DeliveryDetail, DeliveryStep } from "../api/types";
 import { running, useResource } from "../api/useResource";
-import { Copy, Duration, Head12, Loaded, RefreshButton, StatusBadge, Time, humanize } from "../components/ui";
+import { Copy, Duration, Head12, Loaded, RefreshButton, StatusBadge, Time, humanize, newestFirst } from "../components/ui";
 import { PipelineRunFields, TaskRunList } from "./BuildPage";
 
 interface Node {
@@ -14,7 +14,8 @@ interface Node {
   details: ReactNode;
 }
 
-// timeline is what happened to one revision, in order: the commit and the
+// timeline is what happened to one revision, in time order (the page shows
+// it latest first): the commit and the
 // push that started the run (the webhook is the initiating event, not a
 // step), then the run's DeliverySteps as the Tenant CP returns them, then
 // what they produced. Steps are rendered from the data: a new step type
@@ -230,7 +231,7 @@ export function DeliveryPage() {
             </p>
             {d.sanitizedError && <p className="error" role="alert">{d.sanitizedError}</p>}
             <ol className="timeline" aria-label="Delivery timeline">
-              {timeline(appId, d).map((n) => {
+              {newestFirst(timeline(appId, d)).map((n) => {
                 const open = toggled[n.key] ?? (n.kind === "step" && n.status === "FAILED");
                 return (
                   <li key={n.key} className={`tl-node tl-${n.kind}`} data-kind={n.kind}>

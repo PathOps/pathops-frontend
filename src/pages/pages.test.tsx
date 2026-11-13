@@ -72,7 +72,7 @@ describe("Application", () => {
       "Delivery Runs",
     ]);
     expect(screen.queryByText(/Preflight/)).toBeNull();
-    expect(screen.getByRole("link", { name: "view the template at this revision" })).toHaveAttribute("href", f.overview.template.url);
+    expect(screen.getByRole("link", { name: f.overview.template.url })).toHaveAttribute("href", f.overview.template.url);
     expect(screen.getByText("Dockerfile (BuildKit)")).toBeInTheDocument();
     const src = screen.getByRole("link", { name: "alice/manual-web" });
     expect(src).toHaveAttribute("href", "https://forgejo-canary.demo.pathops.io/alice/manual-web");
@@ -84,14 +84,14 @@ describe("Application", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Not found, or not yours.");
   });
 
-  it("lists the provisioning Steps in order with their errors and attempts", async () => {
+  it("lists the provisioning Steps latest first with their errors and attempts", async () => {
     renderAt(`/applications/${f.appId}/provisioning`, fakeApi(all));
     const steps = await screen.findAllByRole("button", { expanded: false });
     expect(steps).toHaveLength(12);
-    expect(steps[0]).toHaveTextContent("Resolve template");
-    expect(steps[11]).toHaveTextContent("Configure build and push access isolation");
+    expect(steps[0]).toHaveTextContent("Configure build and push access isolation");
+    expect(steps[11]).toHaveTextContent("Resolve template");
     expect(screen.getByText("conflict: alice/manual-web exists")).toBeInTheDocument();
-    await userEvent.click(steps[1]);
+    await userEvent.click(steps[10]);
     expect(screen.getByRole("table")).toHaveTextContent("ABSENT");
   });
 
@@ -125,18 +125,18 @@ describe("Application", () => {
 });
 
 describe("Delivery run", () => {
-  it("shows a succeeded run as commit -> push -> steps -> image with its digest", async () => {
+  it("shows a succeeded run latest first: image with its digest, steps, push, commit", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
     const tl = await screen.findByRole("list", { name: "Delivery timeline" });
     const nodes = Array.from(tl.children) as HTMLElement[];
-    expect(nodes.map((n) => n.dataset.kind)).toEqual(["commit", "event", "step", "output"]);
-    expect(nodes[2]).toHaveTextContent("Build application");
-    expect(nodes[3]).toHaveTextContent("OCI image 274af150e590");
-    await userEvent.click(within(nodes[3]).getByRole("button"));
-    expect(nodes[3]).toHaveTextContent(f.digest);
-    await userEvent.click(within(nodes[2]).getByRole("button"));
-    expect(within(nodes[2]).getByRole("link", { name: "build-ok" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
-    expect(within(nodes[2]).queryByRole("list", { name: "Build tree" })).toBeNull();
+    expect(nodes.map((n) => n.dataset.kind)).toEqual(["output", "step", "event", "commit"]);
+    expect(nodes[1]).toHaveTextContent("Build application");
+    expect(nodes[0]).toHaveTextContent("OCI image 274af150e590");
+    await userEvent.click(within(nodes[0]).getByRole("button"));
+    expect(nodes[0]).toHaveTextContent(f.digest);
+    await userEvent.click(within(nodes[1]).getByRole("button"));
+    expect(within(nodes[1]).getByRole("link", { name: "build-ok" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
+    expect(within(nodes[1]).queryByRole("list", { name: "Build tree" })).toBeNull();
   });
 
   it("shows a failed run's error at the run and the step, and no image", async () => {
@@ -144,8 +144,8 @@ describe("Delivery run", () => {
     const tl = await screen.findByRole("list", { name: "Delivery timeline" });
     expect(screen.getByRole("alert")).toHaveTextContent("BUILD_APPLICATION: the PipelineRun manual-web-ci/build-b failed (Failed)");
     const nodes = Array.from(tl.children) as HTMLElement[];
-    expect(nodes[2]).toHaveTextContent("the PipelineRun manual-web-ci/build-b failed (Failed)");
-    expect(nodes[3]).toHaveTextContent("No image");
+    expect(nodes[1]).toHaveTextContent("the PipelineRun manual-web-ci/build-b failed (Failed)");
+    expect(nodes[0]).toHaveTextContent("No image");
     expect(tl).not.toHaveTextContent("OCI image");
     expect(tl).not.toHaveTextContent("sha256:");
   });
@@ -158,7 +158,8 @@ describe("Delivery run", () => {
     expect(within(tree).getByRole("link", { name: "build-bad" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-bad`);
     const lint = await within(tree).findByLabelText("TaskRun lint");
     const image = within(tree).getByLabelText("TaskRun build-image");
-    await userEvent.click(within(image).getAllByRole("button", { name: "view log" })[1]);
+    // Steps latest first: build, then checkout.
+    await userEvent.click(within(image).getAllByRole("button", { name: "view log" })[0]);
     const log = await within(image).findByLabelText("Log of build");
     expect(log).toHaveTextContent("ERROR: failed to solve");
     // The log is the row right under its step's row.
@@ -184,11 +185,11 @@ describe("Delivery run", () => {
     const tl = await screen.findByRole("list", { name: "Delivery timeline" });
     const nodes = Array.from(tl.children) as HTMLElement[];
     expect(nodes.map((n) => n.textContent)).toEqual([
-      expect.stringContaining("Commit"),
-      expect.stringContaining("Push received"),
-      expect.stringContaining("Build application"),
-      expect.stringContaining("Update preflight gitops"),
       expect.stringContaining("OCI image"),
+      expect.stringContaining("Update preflight gitops"),
+      expect.stringContaining("Build application"),
+      expect.stringContaining("Push received"),
+      expect.stringContaining("Commit"),
     ]);
   });
 });

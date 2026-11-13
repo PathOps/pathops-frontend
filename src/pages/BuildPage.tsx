@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { BuildDetail, Log, Tasks, TaskRunView } from "../api/types";
 import { running, useResource } from "../api/useResource";
-import { Copy, Duration, ErrorBox, Field, Head12, Loaded, RefreshButton, StatusBadge, Time } from "../components/ui";
+import { Copy, Duration, ErrorBox, Field, Head12, Loaded, RefreshButton, StatusBadge, Time, newestFirst } from "../components/ui";
 
 const observationText: Record<string, string> = {
   not_found: "Tekton no longer has this PipelineRun (pruned), or has not created it yet.",
@@ -155,7 +155,7 @@ export function TaskRunList({ buildId, buildRunning }: { buildId: string; buildR
           <p className="muted empty">No TaskRun yet.</p>
         ) : (
           <ul className="plain" aria-label="TaskRun list">
-            {d.taskRuns.map((tr) => (
+            {newestFirst(d.taskRuns).map((tr) => (
               <li key={tr.name}>
                 <TaskRun buildId={buildId} tr={tr} open={open} onLog={(key) => setOpen(open === key ? null : key)} />
               </li>
@@ -189,7 +189,7 @@ function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunVie
           </tr>
         </thead>
         <tbody>
-          {tr.steps.map((s) => {
+          {newestFirst(tr.steps).map((s) => {
             const key = `${tr.name}/${s.name}`;
             return (
               <Fragment key={s.name}>
