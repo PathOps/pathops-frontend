@@ -170,7 +170,7 @@ button {
   list-style: none;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 .card,
@@ -199,13 +199,13 @@ button {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 16px;
 }
 .field {
   display: grid;
-  grid-template-columns: 130px 1fr;
+  grid-template-columns: 160px 1fr;
   gap: 8px;
   padding: 3px 0;
 }
