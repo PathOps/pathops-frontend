@@ -17,7 +17,7 @@ const sections: Record<string, { title: string; render: (appId: string, o: Overv
   provisioning: { title: "Provisioning", render: (id) => <ProvisioningSection appId={id} /> },
   repositories: { title: "Repositories", render: (id) => <RepositoriesSection appId={id} /> },
   builds: { title: "Builds", render: (id) => <Builds appId={id} /> },
-  images: { title: "Images", render: (id) => <Images appId={id} /> },
+  images: { title: "Images", render: (id, o) => <Images appId={id} appName={o.name} /> },
   deliveries: { title: "Delivery Runs", render: (id) => <Deliveries appId={id} /> },
 };
 

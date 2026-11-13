@@ -110,6 +110,8 @@ describe("Application", () => {
   it("lists images with their digest and their build, and no registry metadata", async () => {
     renderAt(`/applications/${f.appId}/images`, fakeApi(all));
     expect(await screen.findByText(f.digest)).toBeInTheDocument();
+    expect(screen.getByText(/Image of manual-web/)).toBeInTheDocument();
+    expect(screen.getByText(`zot-canary.demo.pathops.io/apps/${f.appId}`)).toBeInTheDocument();
     expect(screen.getByText("Registry metadata — coming later")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
   });
