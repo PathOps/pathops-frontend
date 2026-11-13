@@ -1,69 +1,58 @@
-import { Link } from "react-router-dom";
 import type { ImageEntry } from "../api/types";
 import { useResource } from "../api/useResource";
-import { ComingLater, Copy, Head12, Loaded, Time } from "../components/ui";
+import { BuildLink, Copy, Loaded, Short, Time } from "../components/ui";
 
-export function Images({ appId, appName }: { appId: string; appName: string }) {
+export function Images({ appId }: { appId: string }) {
   const r = useResource<{ images: ImageEntry[] }>(`/api/v1/applications/${appId}/images`);
   return (
     <>
       <h2>Images</h2>
+      <p>OCI artifacts stored in zot.</p>
       <Loaded resource={r} empty={(d) => d.images.length === 0}>
         {(d) => (
-          <ul className="cards">
-            {d.images.map((i) => (
-              <li key={i.digest + i.buildId} className="card">
-                <h3 className="card-heading">
-                  Image of {appName} <Head12 revision={i.sourceRevision} head12={i.head12} />
-                </h3>
-                <dl>
-                  {/* The registry repository is named by the Application's id
-                      (Decision 0056 §8), never by its name. */}
-                  <div className="field">
-                    <dt>Repository</dt>
-                    <dd>
-                      <Copy text={i.repository} />
-                    </dd>
-                  </div>
-                  <div className="field">
-                    <dt>Reference</dt>
-                    <dd>
-                      <Copy text={i.reference} />
-                    </dd>
-                  </div>
-                  <div className="field">
-                    <dt>Digest</dt>
-                    <dd>
-                      <Copy text={i.digest} />
-                    </dd>
-                  </div>
-                  <div className="field">
-                    <dt>Pinned</dt>
-                    <dd>
-                      <Copy text={i.pinnedReference} label="repository@digest" />
-                    </dd>
-                  </div>
-                  <div className="field">
-                    <dt>Built</dt>
-                    <dd>
-                      <Time at={i.builtAt} />
-                    </dd>
-                  </div>
-                  <div className="field">
-                    <dt>From</dt>
-                    <dd>
-                      <Link to={`/applications/${appId}/builds/${i.buildId}`}>Build</Link> ·{" "}
-                      <Link to={`/applications/${appId}/deliveries/${i.deliveryRunId}`}>Delivery run</Link>
-                    </dd>
-                  </div>
-                </dl>
-                {/* Registry metadata (size, creation time, manifests) arrives with a
-                    read-only registry identity of the Tenant CP; nothing is shown
-                    until then. */}
-                {i.registryMetadata === null && <ComingLater what="Registry metadata" />}
-              </li>
-            ))}
-          </ul>
+          <>
+            {/* The registry repository is named by the Application's id
+                (Decision 0056 §8), never by its name. */}
+            <p>
+              Repository: <Copy text={d.images[0].repository} />
+            </p>
+            <div className="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tag</th>
+                    <th>Digest</th>
+                    <th>Build</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.images.map((i) => (
+                    <tr key={i.digest + i.buildId}>
+                      <td>
+                        <Copy text={i.reference}>
+                          <code>{i.revision}</code>
+                        </Copy>
+                      </td>
+                      <td>
+                        <Copy text={i.pinnedReference}>
+                          <Short text={i.digest} />
+                        </Copy>
+                      </td>
+                      <td>
+                        <BuildLink appId={appId} id={i.buildId} number={i.buildNumber} />
+                      </td>
+                      <td>
+                        <Time at={i.builtAt} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Registry metadata (size, manifests) arrives with a read-only
+                registry identity of the Tenant CP; nothing is invented until then. */}
+          </>
         )}
       </Loaded>
     </>

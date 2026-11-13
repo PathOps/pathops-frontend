@@ -10,8 +10,11 @@ export interface Technology {
   build?: string;
 }
 
+// number is the run's or build's #N within its Application (its own
+// sequence); id stays its identity in URLs.
 export interface DeliveryRef {
   id: string;
+  number: number;
   sourceRevision: string;
   head12: string;
   status: string;
@@ -118,12 +121,14 @@ export interface Image {
 
 export interface BuildRef {
   id: string;
+  number: number;
   status: string;
   image: Image | null;
 }
 
 export interface DeliverySummary {
   id: string;
+  number: number;
   sourceRevision: string;
   head12: string;
   status: string;
@@ -160,8 +165,10 @@ export interface DeliveryDetail extends DeliverySummary {
 
 export interface BuildSummary {
   id: string;
+  number: number;
   applicationId: string;
   deliveryRunId: string;
+  deliveryNumber: number;
   deliveryStepId: string;
   sourceRevision: string;
   head12: string;
@@ -246,7 +253,9 @@ export interface RegistryMetadata {
 
 export interface ImageEntry extends Image {
   buildId: string;
+  buildNumber: number;
   deliveryRunId: string;
+  deliveryNumber: number;
   sourceRevision: string;
   head12: string;
   builtAt: Iso | null;

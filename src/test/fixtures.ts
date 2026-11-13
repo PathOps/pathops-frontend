@@ -35,7 +35,7 @@ export const applications: { applications: ApplicationSummary[] } = {
       templateId: "generic-container",
       technology: { runtime: "container", language: "any", build: "Dockerfile (BuildKit)" },
       provisioning: { status: "SUCCEEDED", completedAt: t0 },
-      lastDelivery: { id: "run-ok", sourceRevision: okRev, head12: okRev.slice(0, 12), status: "SUCCEEDED", createdAt: t0, completedAt: t1 },
+      lastDelivery: { id: "run-ok", number: 1, sourceRevision: okRev, head12: okRev.slice(0, 12), status: "SUCCEEDED", createdAt: t0, completedAt: t1 },
       createdAt: t0,
     },
   ],
@@ -117,6 +117,7 @@ export const deliveries: { deliveries: DeliverySummary[] } = {
   deliveries: [
     {
       id: "run-bad",
+      number: 2,
       sourceRevision: badRev,
       head12: badRev.slice(0, 12),
       status: "FAILED",
@@ -125,10 +126,11 @@ export const deliveries: { deliveries: DeliverySummary[] } = {
       completedAt: t1,
       durationSeconds: 61,
       sanitizedError: "BUILD_APPLICATION: the PipelineRun manual-web-ci/build-b failed (Failed)",
-      build: { id: "build-bad", status: "FAILED", image: null },
+      build: { id: "build-bad", number: 2, status: "FAILED", image: null },
     },
     {
       id: "run-ok",
+      number: 1,
       sourceRevision: okRev,
       head12: okRev.slice(0, 12),
       status: "SUCCEEDED",
@@ -136,7 +138,7 @@ export const deliveries: { deliveries: DeliverySummary[] } = {
       startedAt: t0,
       completedAt: t1,
       durationSeconds: 120,
-      build: { id: "build-ok", status: "SUCCEEDED", image },
+      build: { id: "build-ok", number: 1, status: "SUCCEEDED", image },
     },
   ],
 };
@@ -173,8 +175,10 @@ export const deliveryBad = detail(deliveries.deliveries[0]);
 
 export const buildOk: BuildDetail = {
   id: "build-ok",
+  number: 1,
   applicationId: appId,
   deliveryRunId: "run-ok",
+  deliveryNumber: 1,
   deliveryStepId: "step-1-uuid",
   sourceRevision: okRev,
   head12: okRev.slice(0, 12),
@@ -242,7 +246,9 @@ export const images: { images: ImageEntry[] } = {
     {
       ...image,
       buildId: "build-ok",
+      buildNumber: 1,
       deliveryRunId: "run-ok",
+      deliveryNumber: 1,
       sourceRevision: okRev,
       head12: okRev.slice(0, 12),
       builtAt: t1,
@@ -256,7 +262,9 @@ export const images: { images: ImageEntry[] } = {
 export const buildBad: BuildDetail = {
   ...buildOk,
   id: "build-bad",
+  number: 2,
   deliveryRunId: "run-bad",
+  deliveryNumber: 2,
   status: "FAILED",
   image: null,
   sanitizedError: "the PipelineRun manual-web-ci/build-b failed (Failed)",

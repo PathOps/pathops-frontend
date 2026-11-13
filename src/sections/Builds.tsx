@@ -1,7 +1,6 @@
-import { Link } from "react-router-dom";
 import type { BuildSummary } from "../api/types";
 import { running, useResource } from "../api/useResource";
-import { Duration, Head12, Loaded, RefreshButton, StatusBadge, Time } from "../components/ui";
+import { BuildLink, Duration, Head12, Loaded, RefreshButton, RunLink, Status, Time } from "../components/ui";
 
 export function Builds({ appId }: { appId: string }) {
   const b = useResource<{ builds: BuildSummary[] }>(`/api/v1/applications/${appId}/builds`, {
@@ -9,48 +8,50 @@ export function Builds({ appId }: { appId: string }) {
   });
   return (
     <>
-      <div className="page-head">
-        <h2>Builds</h2>
-        <RefreshButton resource={b} />
-      </div>
+      <h2>Builds</h2>
+      <p>
+        Image builds, each the BUILD_APPLICATION step of a delivery run. <RefreshButton resource={b} />
+      </p>
       <Loaded resource={b} empty={(d) => d.builds.length === 0}>
         {(d) => (
-          <table className="list">
-            <thead>
-              <tr>
-                <th>Revision</th>
-                <th>Status</th>
-                <th>Started</th>
-                <th>Duration</th>
-                <th>PipelineRun</th>
-                <th>Image</th>
-              </tr>
-            </thead>
-            <tbody>
-              {d.builds.map((x) => (
-                <tr key={x.id}>
-                  <td>
-                    <Link to={`/applications/${appId}/builds/${x.id}`}>
-                      <Head12 revision={x.sourceRevision} head12={x.head12} />
-                    </Link>
-                  </td>
-                  <td>
-                    <StatusBadge status={x.status} />
-                  </td>
-                  <td>
-                    <Time at={x.startedAt ?? x.createdAt} />
-                  </td>
-                  <td>
-                    <Duration seconds={x.durationSeconds} />
-                  </td>
-                  <td>
-                    <code className="small">{x.pipelineRun.name}</code>
-                  </td>
-                  <td>{x.image ? <code className="small">{x.image.revision}</code> : <span className="muted">no image</span>}</td>
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Build</th>
+                  <th>Commit</th>
+                  <th>Status</th>
+                  <th>Run</th>
+                  <th>Started</th>
+                  <th>Duration</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {d.builds.map((x) => (
+                  <tr key={x.id}>
+                    <td>
+                      <BuildLink appId={appId} id={x.id} number={x.number} />
+                    </td>
+                    <td>
+                      <Head12 revision={x.sourceRevision} head12={x.head12} />
+                    </td>
+                    <td>
+                      <Status status={x.status} />
+                    </td>
+                    <td>
+                      <RunLink appId={appId} id={x.deliveryRunId} number={x.deliveryNumber} />
+                    </td>
+                    <td>
+                      <Time at={x.startedAt ?? x.createdAt} />
+                    </td>
+                    <td>
+                      <Duration seconds={x.durationSeconds} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Loaded>
     </>

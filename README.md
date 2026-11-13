@@ -37,24 +37,29 @@ reload signs in again through Dex's login session (shared with the CLI and
 Forgejo), without a password. Only the PKCE verifier, state and return path
 cross the redirect, in `sessionStorage`.
 
-## Screens (v0.1)
+## Screens (v0.2)
 
-- **Applications**: the user's Applications, technology, provisioning and last
-  delivery (HEAD12).
-- **Application**: the sections the Tenant Control Plane names
-  (`overview.sections`): General (owner, template at its exact revision,
-  declared technology, repositories), Provisioning (Run, ordered Steps,
-  Attempts, errors), Repositories (source, preflight GitOps, production
-  GitOps: canonical Forgejo links, clone URLs; live metadata "coming later"),
-  Builds, Images (`repository:HEAD12`, digest; registry metadata "coming later"),
-  Delivery Runs.
-- **Delivery run**: a timeline built from its DeliverySteps: commit HEAD12 ->
-  push received -> each step -> the OCI image (or "No image" for a failed
-  build). A new step type appears without a UI change.
-- **Build**: Application -> DeliveryRun -> BUILD_APPLICATION step -> Build ->
-  PipelineRun; the PipelineRun's status and results, its TaskRuns and their
-  steps, and each step's log (the last 4000 lines, at most 256 KiB, as the
-  Tenant Control Plane bounds it; not streamed).
+Plain, document-like pages: bordered tables, bold colored statuses, a light
+and a dark theme (the system's, or the user's choice). Everything temporal is
+latest first; DeliveryRuns and Builds are named by their number within the
+Application (`#N`, from the Tenant Control Plane).
+
+- **Applications**: a table of the user's Applications: technology, template,
+  provisioning, last delivery (`#N` and status).
+- **Application**: the Application ID, a summary (technology, template link,
+  last delivery, provisioning; Production and Preflight under construction)
+  and the tabs Production, Preflight, Delivery, Validations, Images, Builds,
+  Repositories, Provisioning. Production, Preflight and Validations are
+  marked "Under construction" until their slices ship; the others appear when
+  the Tenant Control Plane names them (`overview.sections`).
+- **Delivery run**: its facts (commit, source, times, error), its DeliverySteps
+  latest first (a new step type appears without a UI change), and the OCI
+  image (or "No image"). A step's details are its build tree: Build ->
+  PipelineRun -> TaskRuns -> steps; a failed step starts open.
+- **Build**: its facts and delivery run, the PipelineRun's status and results,
+  its TaskRuns and their steps. Each step's log (the last 4000 lines, at most
+  256 KiB, as the Tenant Control Plane bounds it; not streamed) opens in the
+  row under the step, one at a time.
 
 Running deliveries and builds are read again every 5 s while they run, and
 every view has Refresh. There is no push channel yet (no SSE, no WebSocket).

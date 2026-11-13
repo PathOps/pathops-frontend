@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import type { ApplicationSummary, Technology } from "../api/types";
 import { useResource } from "../api/useResource";
-import { Field, Head12, Loaded, RefreshButton, StatusBadge, Time } from "../components/ui";
+import { Page } from "../components/Page";
+import { Loaded, RefreshButton, RunLink, Status, Time } from "../components/ui";
 
 export function technologyLine(t: Technology | null): string {
   if (!t) return "Technology not declared";
@@ -12,47 +13,56 @@ export function technologyLine(t: Technology | null): string {
 export function ApplicationsPage() {
   const apps = useResource<{ applications: ApplicationSummary[] }>("/api/v1/applications");
   return (
-    <main>
-      <div className="page-head">
-        <h1>Applications</h1>
+    <Page>
+      <h1>Applications</h1>
+      <p>
         <RefreshButton resource={apps} />
-      </div>
+      </p>
       <Loaded resource={apps} empty={(d) => d.applications.length === 0}>
         {(d) => (
-          <ul className="cards">
-            {d.applications.map((a) => (
-              <li key={a.id} className="card">
-                <h2 className="card-heading">
-                  <Link to={`/applications/${a.id}/general`}>{a.name}</Link>
-                </h2>
-                <dl>
-                  <Field label="Technology">{technologyLine(a.technology)}</Field>
-                  <Field label="Template">{a.templateId}</Field>
-                  <Field label="Provisioning">
-                    <StatusBadge status={a.provisioning.status} />
-                  </Field>
-                  <Field label="Status">
-                    <StatusBadge status={a.status} />
-                  </Field>
-                  <Field label="Last delivery">
-                    {a.lastDelivery ? (
-                      <Link to={`/applications/${a.id}/deliveries/${a.lastDelivery.id}`}>
-                        <StatusBadge status={a.lastDelivery.status} />{" "}
-                        <Head12 revision={a.lastDelivery.sourceRevision} head12={a.lastDelivery.head12} />
-                      </Link>
-                    ) : (
-                      <span className="muted">none yet</span>
-                    )}
-                  </Field>
-                  <Field label="Created">
-                    <Time at={a.createdAt} />
-                  </Field>
-                </dl>
-              </li>
-            ))}
-          </ul>
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Application</th>
+                  <th>Technology</th>
+                  <th>Template</th>
+                  <th>Provisioning</th>
+                  <th>Last delivery</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.applications.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <Link to={`/applications/${a.id}`}>{a.name}</Link>
+                    </td>
+                    <td>{technologyLine(a.technology)}</td>
+                    <td>{a.templateId}</td>
+                    <td>
+                      <Status status={a.provisioning.status} />
+                    </td>
+                    <td>
+                      {a.lastDelivery ? (
+                        <>
+                          <RunLink appId={a.id} id={a.lastDelivery.id} number={a.lastDelivery.number} /> —{" "}
+                          <Status status={a.lastDelivery.status} />
+                        </>
+                      ) : (
+                        <span className="muted">none yet</span>
+                      )}
+                    </td>
+                    <td>
+                      <Time at={a.createdAt} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Loaded>
-    </main>
+    </Page>
   );
 }

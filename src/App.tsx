@@ -1,9 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { SigningIn, signIn } from "./api/client";
-import type { Me } from "./api/types";
-import { useResource } from "./api/useResource";
-import { CALLBACK_PATH, completeSignIn, signOut, signedIn } from "./auth/oidc";
+import { CALLBACK_PATH, completeSignIn, signedIn } from "./auth/oidc";
 import { ApplicationPage } from "./pages/ApplicationPage";
 import { ApplicationsPage } from "./pages/ApplicationsPage";
 import { BuildPage } from "./pages/BuildPage";
@@ -15,7 +13,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<ApplicationsPage />} />
-      <Route path="/applications/:appId" element={<RedirectToGeneral />} />
+      <Route path="/applications/:appId" element={<RedirectToDefault />} />
       <Route path="/applications/:appId/deliveries/:runId" element={<DeliveryPage />} />
       <Route path="/applications/:appId/builds/:buildId" element={<BuildPage />} />
       <Route path="/applications/:appId/:section" element={<ApplicationPage />} />
@@ -24,34 +22,9 @@ export function AppRoutes() {
   );
 }
 
-function RedirectToGeneral() {
-  return <Navigate to="general" replace />;
-}
-
-function Header() {
-  const me = useResource<Me>("/api/v1/me");
-  const [out, setOut] = useState(false);
-  return (
-    <header className="top">
-      <Link to="/" className="brand">
-        PathOps
-      </Link>
-      {me.data && <span className="muted small">Cell {me.data.cellId}</span>}
-      <span className="spacer" />
-      {me.data && <span className="small">{me.data.email ?? me.data.name ?? me.data.subject}</span>}
-      <button
-        type="button"
-        className="link-button"
-        onClick={() => {
-          signOut();
-          setOut(true);
-        }}
-      >
-        Sign out
-      </button>
-      {out && <Navigate to="/signed-out" replace />}
-    </header>
-  );
+// An Application opens at its delivery runs.
+function RedirectToDefault() {
+  return <Navigate to="deliveries" replace />;
 }
 
 let signingIn = false;
@@ -112,7 +85,6 @@ export function App() {
         path="*"
         element={
           <Signed>
-            <Header />
             <AppRoutes />
           </Signed>
         }

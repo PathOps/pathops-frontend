@@ -30,18 +30,18 @@ const all = {
 };
 
 describe("Applications", () => {
-  it("shows loading, then the user's Applications", async () => {
+  it("shows loading, then the user's Applications as a table", async () => {
     let resolve: (v: unknown) => void = () => {};
     const api = fakeApi({ "/api/v1/applications": new Promise((r) => (resolve = r)) });
     renderAt("/", api);
     expect(screen.getByRole("status")).toHaveTextContent("Loading");
     resolve(f.applications);
-    expect(await screen.findByRole("link", { name: "manual-web" })).toHaveAttribute("href", `/applications/${f.appId}/general`);
+    expect(await screen.findByRole("link", { name: "manual-web" })).toHaveAttribute("href", `/applications/${f.appId}`);
     expect(screen.getByText(/any · container · Dockerfile \(BuildKit\)/)).toBeInTheDocument();
-    expect(screen.getByText("274af150e590")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
   });
 
-  it("shows an empty list and errors", async () => {
+  it("shows an empty list", async () => {
     renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] } }));
     expect(await screen.findByText("Nothing here yet.")).toBeInTheDocument();
   });
@@ -51,127 +51,139 @@ describe("Applications", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("500");
   });
 
-  it("navigates from the list to an Application", async () => {
+  it("navigates from the list to an Application, opened at its delivery runs", async () => {
     renderAt("/", fakeApi(all));
     await userEvent.click(await screen.findByRole("link", { name: "manual-web" }));
-    expect(await screen.findByRole("heading", { name: /manual-web/ })).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Application sections" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "manual-web" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Delivery Runs" })).toBeInTheDocument();
   });
 });
 
 describe("Application", () => {
-  it("has the sections the Tenant CP names, and General shows the template and technology", async () => {
-    renderAt(`/applications/${f.appId}/general`, fakeApi(all));
+  it("has a summary and the tabs, the planned ones under construction", async () => {
+    renderAt(`/applications/${f.appId}/deliveries`, fakeApi(all));
     const tabs = await screen.findByRole("navigation", { name: "Application sections" });
     expect(within(tabs).getAllByRole("link").map((l) => l.textContent)).toEqual([
-      "General",
-      "Provisioning",
-      "Repositories",
-      "Builds",
+      "Production",
+      "Preflight",
+      "Delivery",
+      "Validations",
       "Images",
-      "Delivery Runs",
+      "Builds",
+      "Repositories",
+      "Provisioning",
     ]);
-    expect(screen.queryByText(/Preflight/)).toBeNull();
-    expect(screen.getByRole("link", { name: f.overview.template.url })).toHaveAttribute("href", f.overview.template.url);
-    expect(screen.getByText("Dockerfile (BuildKit)")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Repositories" })).toBeNull();
+    const summary = screen.getByRole("table", { name: "Summary" });
+    expect(summary).toHaveTextContent("any · container · Dockerfile (BuildKit)");
+    expect(within(summary).getByRole("link", { name: "generic-container ↗" })).toHaveAttribute("href", f.overview.template.url);
+    expect(within(summary).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    expect(summary).toHaveTextContent("Production");
+    expect(screen.getByText(f.appId)).toBeInTheDocument();
+    for (const planned of ["Production", "Preflight", "Validations"]) {
+      await userEvent.click(within(tabs).getByRole("link", { name: planned }));
+      const section = await screen.findByRole("region", { name: planned });
+      expect(within(section).getByRole("heading", { level: 2, name: planned })).toBeInTheDocument();
+      expect(within(section).getByText("Under construction")).toBeInTheDocument();
+    }
   });
 
   it("is not found for an id that is not the user's", async () => {
-    renderAt(`/applications/22222222-2222-4222-8222-222222222222/general`, fakeApi(all));
+    renderAt(`/applications/22222222-2222-4222-8222-222222222222/deliveries`, fakeApi(all));
     expect(await screen.findByRole("alert")).toHaveTextContent("Not found, or not yours.");
   });
 
-  it("lists the provisioning Steps latest first with their errors and attempts", async () => {
-    renderAt(`/applications/${f.appId}/provisioning`, fakeApi(all));
-    const steps = await screen.findAllByRole("button", { expanded: false });
-    expect(steps).toHaveLength(12);
-    expect(steps[0]).toHaveTextContent("Configure build and push access isolation");
-    expect(steps[11]).toHaveTextContent("Resolve template");
-    expect(screen.getByText("conflict: alice/manual-web exists")).toBeInTheDocument();
-    await userEvent.click(steps[10]);
-    expect(screen.getByRole("table")).toHaveTextContent("ABSENT");
+  it("sends an old or unknown section to the delivery runs", async () => {
+    renderAt(`/applications/${f.appId}/general`, fakeApi(all));
+    expect(await screen.findByRole("heading", { name: "Delivery Runs" })).toBeInTheDocument();
   });
 
-  it("lists the three repositories with their links, and no invented metadata", async () => {
+  it("lists the provisioning Steps latest first with their errors", async () => {
+    renderAt(`/applications/${f.appId}/provisioning`, fakeApi(all));
+    const table = await screen.findByRole("table", { name: "Provisioning steps" });
+    const rows = within(table).getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("Configure build and push access isolation");
+    expect(rows[rows.length - 1]).toHaveTextContent("Resolve template");
+    expect(table).toHaveTextContent("conflict: alice/manual-web exists");
+  });
+
+  it("lists the three repositories with their links", async () => {
     renderAt(`/applications/${f.appId}/repositories`, fakeApi(all));
-    expect(await screen.findByRole("heading", { name: "Source" })).toBeInTheDocument();
-    expect(screen.getByText("Preflight GitOps")).toBeInTheDocument();
-    expect(screen.getByText("Production GitOps")).toBeInTheDocument();
-    expect(screen.getAllByText("Repository metadata — coming later")).toHaveLength(3);
-    expect(screen.getByRole("link", { name: "alice/manual-web-gitops-production" })).toHaveAttribute(
-      "href",
-      "https://forgejo-canary.demo.pathops.io/alice/manual-web-gitops-production",
-    );
-    const src = screen.getByRole("link", { name: "alice/manual-web" });
+    const src = await screen.findByRole("link", { name: "alice/manual-web ↗" });
     expect(src).toHaveAttribute("href", "https://forgejo-canary.demo.pathops.io/alice/manual-web");
     expect(src).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getByRole("link", { name: "alice/manual-web-gitops-production ↗" })).toBeInTheDocument();
+    expect(screen.getByText("gitops-preflight")).toBeInTheDocument();
   });
 
-  it("lists images with their digest and their build, and no registry metadata", async () => {
+  it("lists images with their tag, digest and build", async () => {
     renderAt(`/applications/${f.appId}/images`, fakeApi(all));
-    expect(await screen.findByText(f.digest)).toBeInTheDocument();
-    expect(screen.getByText(/Image of manual-web/)).toBeInTheDocument();
-    expect(screen.getByText(`zot-canary.demo.pathops.io/apps/${f.appId}`)).toBeInTheDocument();
-    expect(screen.getByText("Registry metadata — coming later")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
+    expect(await screen.findByText(`zot-canary.demo.pathops.io/apps/${f.appId}`)).toBeInTheDocument();
+    expect(screen.getByTitle(f.digest)).toBeInTheDocument();
+    expect(screen.getByText("274af150e590")).toBeInTheDocument();
+    const section = screen.getByRole("region", { name: "Images" });
+    expect(within(section).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
   });
 
-  it("lists delivery runs by HEAD12 with their result", async () => {
+  it("lists builds by number with their run", async () => {
+    renderAt(`/applications/${f.appId}/builds`, fakeApi({ ...all, [`${app}/builds`]: { builds: [f.buildBad, f.buildOk] } }));
+    const links = await screen.findAllByRole("link", { name: "#2" });
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      `/applications/${f.appId}/builds/build-bad`,
+      `/applications/${f.appId}/deliveries/run-bad`,
+    ]);
+  });
+
+  it("lists delivery runs by number, newest first", async () => {
     renderAt(`/applications/${f.appId}/deliveries`, fakeApi(all));
-    expect(await screen.findByRole("link", { name: "274af150e590" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
-    expect(screen.getByRole("link", { name: "202161553024" })).toBeInTheDocument();
-    expect(screen.getByText(/the PipelineRun manual-web-ci\/build-b failed/)).toBeInTheDocument();
+    const section = await screen.findByRole("region", { name: "Delivery" });
+    const runs = await within(section).findAllByRole("link", { name: /^#\d+$/ });
+    expect(runs.map((l) => l.textContent)).toEqual(["#2", "#1"]);
+    expect(runs[1]).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    expect(section).toHaveTextContent("202161553024");
   });
 });
 
 describe("Delivery run", () => {
-  it("shows a succeeded run latest first: image with its digest, steps, push, commit", async () => {
+  it("shows a succeeded run: its facts, its steps and the image", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
-    const tl = await screen.findByRole("list", { name: "Delivery timeline" });
-    const nodes = Array.from(tl.children) as HTMLElement[];
-    expect(nodes.map((n) => n.dataset.kind)).toEqual(["output", "step", "event", "commit"]);
-    expect(nodes[1]).toHaveTextContent("Build application");
-    expect(nodes[0]).toHaveTextContent("OCI image 274af150e590");
-    await userEvent.click(within(nodes[0]).getByRole("button"));
-    expect(nodes[0]).toHaveTextContent(f.digest);
-    await userEvent.click(within(nodes[1]).getByRole("button"));
-    expect(within(nodes[1]).getByRole("link", { name: "build-ok" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
-    expect(within(nodes[1]).queryByRole("list", { name: "Build tree" })).toBeNull();
+    expect(await screen.findByRole("heading", { level: 1, name: "Delivery #1" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Delivery run" })).toHaveTextContent(f.okRev);
+    const steps = screen.getByRole("table", { name: "Delivery steps" });
+    expect(steps).toHaveTextContent("Build application");
+    expect(within(steps).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
+    expect(within(steps).queryByRole("list", { name: "Build tree" })).toBeNull();
+    expect(screen.getByRole("table", { name: "Image" })).toHaveTextContent(f.digest);
   });
 
-  it("shows a failed run's error at the run and the step, and no image", async () => {
+  it("shows a failed run's error and no image", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
-    const tl = await screen.findByRole("list", { name: "Delivery timeline" });
-    expect(screen.getByRole("alert")).toHaveTextContent("BUILD_APPLICATION: the PipelineRun manual-web-ci/build-b failed (Failed)");
-    const nodes = Array.from(tl.children) as HTMLElement[];
-    expect(nodes[1]).toHaveTextContent("the PipelineRun manual-web-ci/build-b failed (Failed)");
-    expect(nodes[0]).toHaveTextContent("No image");
-    expect(tl).not.toHaveTextContent("OCI image");
-    expect(tl).not.toHaveTextContent("sha256:");
+    expect(await screen.findByRole("alert")).toHaveTextContent("BUILD_APPLICATION: the PipelineRun manual-web-ci/build-b failed (Failed)");
+    expect(screen.getByRole("table", { name: "Delivery steps" })).toHaveTextContent("the PipelineRun manual-web-ci/build-b failed (Failed)");
+    expect(screen.getByText("No image: the run failed, nothing was published.")).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Image" })).toBeNull();
   });
 
   it("opens a failed step as its build tree, with one step's log open at a time under its step", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
     const tree = await screen.findByRole("list", { name: "Build tree" });
-    expect(tree).toHaveTextContent("PipelineRun manual-web-ci/build-b");
+    expect(tree).toHaveTextContent("manual-web-ci/build-b");
     expect(tree).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
-    expect(within(tree).getByRole("link", { name: "build-bad" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-bad`);
-    const lint = await within(tree).findByLabelText("TaskRun lint");
-    const image = within(tree).getByLabelText("TaskRun build-image");
+    expect(within(tree).getByRole("link", { name: "#2" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-bad`);
+    const lint = await within(tree).findByRole("group", { name: "TaskRun lint" });
+    const image = within(tree).getByRole("group", { name: "TaskRun build-image" });
     // Steps latest first: build, then checkout.
-    await userEvent.click(within(image).getAllByRole("button", { name: "view log" })[0]);
-    const log = await within(image).findByLabelText("Log of build");
+    await userEvent.click(within(image).getAllByRole("button", { name: "View log" })[0]);
+    const log = await within(image).findByRole("log", { name: "Log of build" });
     expect(log).toHaveTextContent("ERROR: failed to solve");
     // The log is the row right under its step's row.
     const stepRow = within(image).getByRole("cell", { name: "build" }).closest("tr")!;
     expect(stepRow.nextElementSibling).toContainElement(log);
-    await userEvent.click(within(lint).getByRole("button", { name: "view log" }));
+    await userEvent.click(within(lint).getByRole("button", { name: "View log" }));
     expect(await within(lint).findByText("lint checkout ok")).toBeInTheDocument();
-    expect(within(image).queryByLabelText("Log of build")).toBeNull();
+    expect(within(image).queryByRole("log", { name: "Log of build" })).toBeNull();
   });
 
-  it("renders the steps the Tenant CP returns, including types it does not know yet", async () => {
+  it("renders the steps the Tenant CP returns latest first, including types it does not know yet", async () => {
     const future: DeliveryDetail = {
       ...f.deliveryOk,
       status: "RUNNING",
@@ -183,30 +195,27 @@ describe("Delivery run", () => {
       ],
     };
     renderAt(`/applications/${f.appId}/deliveries/run-x`, fakeApi({ [`${app}/deliveries/run-x`]: future }));
-    const tl = await screen.findByRole("list", { name: "Delivery timeline" });
-    const nodes = Array.from(tl.children) as HTMLElement[];
-    expect(nodes.map((n) => n.textContent)).toEqual([
-      expect.stringContaining("OCI image"),
-      expect.stringContaining("Update preflight gitops"),
-      expect.stringContaining("Build application"),
-      expect.stringContaining("Push received"),
-      expect.stringContaining("Commit"),
-    ]);
+    const steps = await screen.findByRole("table", { name: "Delivery steps" });
+    const rows = within(steps).getAllByRole("row").slice(1);
+    expect(rows[0]).toHaveTextContent("Update preflight gitops");
+    expect(rows[1]).toHaveTextContent("Build application");
   });
 });
 
 describe("Build", () => {
-  it("correlates the build and shows its PipelineRun, TaskRuns, steps and a bounded log", async () => {
+  it("shows the build by number, its PipelineRun, TaskRuns, steps and a bounded log", async () => {
     renderAt(`/applications/${f.appId}/builds/build-ok`, fakeApi(all));
-    const chain = await screen.findByRole("list", { name: "Correlation" });
-    expect(chain).toHaveTextContent("Delivery run 274af150e590");
-    expect(chain).toHaveTextContent("PipelineRun manual-web-ci/build-build-ok");
-    expect(screen.getByText("imageDigest")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Build #1" })).toBeInTheDocument();
+    const facts = screen.getByRole("table", { name: "Build" });
+    expect(within(facts).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    const pr = screen.getByRole("table", { name: "PipelineRun" });
+    expect(pr).toHaveTextContent("manual-web-ci/build-build-ok");
+    expect(pr).toHaveTextContent("imageDigest");
     const tasks = await screen.findByRole("region", { name: "TaskRuns" });
     await waitFor(() => expect(tasks).toHaveTextContent("build-image"));
     for (const step of ["checkout", "build", "push"]) expect(within(tasks).getByText(step)).toBeInTheDocument();
-    await userEvent.click(within(tasks).getAllByRole("button", { name: "view log" })[1]);
-    const log = await screen.findByLabelText("Log of build");
+    await userEvent.click(within(tasks).getAllByRole("button", { name: "View log" })[1]);
+    const log = await screen.findByRole("log", { name: "Log of build" });
     expect(log).toHaveTextContent("exporting to oci image format");
     expect(log).toHaveTextContent("Truncated: the last 4000 lines, at most 256 KiB.");
   });
@@ -218,5 +227,17 @@ describe("Build", () => {
       "/api/v1/builds/build-ok/tasks": { buildId: "build-ok", observation: "not_found", taskRuns: [] },
     }));
     expect((await screen.findAllByText(/no longer has this PipelineRun/)).length).toBeGreaterThan(0);
+  });
+});
+
+describe("Theme", () => {
+  it("toggles light and dark and remembers the choice", async () => {
+    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] } }));
+    const before = document.documentElement.dataset.theme;
+    const toggle = screen.getByRole("button", { name: /mode$/ });
+    await userEvent.click(toggle);
+    const after = document.documentElement.dataset.theme;
+    expect(after).not.toEqual(before);
+    expect(localStorage.getItem("pathops-theme")).toEqual(after);
   });
 });
