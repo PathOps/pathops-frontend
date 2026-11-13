@@ -10,7 +10,7 @@ export function Builds({ appId }: { appId: string }) {
     <>
       <h2>Builds</h2>
       <p>
-        Image builds, each the BUILD_APPLICATION step of a delivery run. <RefreshButton resource={b} />
+        <RefreshButton resource={b} />
       </p>
       <Loaded resource={b} empty={(d) => d.builds.length === 0}>
         {(d) => (
@@ -18,10 +18,10 @@ export function Builds({ appId }: { appId: string }) {
             <table>
               <thead>
                 <tr>
-                  <th>Build</th>
+                  <th>#</th>
                   <th>Commit</th>
                   <th>Status</th>
-                  <th>Run</th>
+                  <th>Delivery</th>
                   <th>Started</th>
                   <th>Duration</th>
                 </tr>

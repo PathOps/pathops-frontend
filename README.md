@@ -45,11 +45,14 @@ latest first; DeliveryRuns and Builds are named by their number within the
 Application (`#N`, from the Tenant Control Plane).
 
 - **Applications**: a table of the user's Applications: technology, template,
-  provisioning, last delivery (`#N` and status).
+  provisioning, last delivery (`#N` and status), and Production and Preflight
+  (an open link and the current version's deploy time; "not deployed" until
+  the Tenant Control Plane records environment deploys).
 - **Application**: the Application ID, a summary (technology, template link,
   last delivery, provisioning; Production and Preflight under construction)
   and the tabs Production, Preflight, Delivery, Validations, Images, Builds,
-  Repositories, Provisioning. Production, Preflight and Validations are
+  Repositories, Provisioning. Images copy each image's pinned reference
+  (`repository@digest`, what a manifest uses). Production, Preflight and Validations are
   marked "Under construction" until their slices ship; the others appear when
   the Tenant Control Plane names them (`overview.sections`).
 - **Delivery run**: its facts (commit, source, times, error), its DeliverySteps

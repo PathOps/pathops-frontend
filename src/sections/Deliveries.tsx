@@ -18,7 +18,7 @@ export function Deliveries({ appId }: { appId: string }) {
             <table>
               <thead>
                 <tr>
-                  <th>Run</th>
+                  <th>#</th>
                   <th>Commit</th>
                   <th>Status</th>
                   <th>Started</th>

@@ -29,6 +29,10 @@ export function ApplicationsPage() {
                   <th>Template</th>
                   <th>Provisioning</th>
                   <th>Last delivery</th>
+                  <th>Production</th>
+                  <th>Production deploy</th>
+                  <th>Preflight</th>
+                  <th>Preflight deploy</th>
                   <th>Created</th>
                 </tr>
               </thead>
@@ -53,6 +57,13 @@ export function ApplicationsPage() {
                         <span className="muted">none yet</span>
                       )}
                     </td>
+                    {/* The Tenant CP records no environment deploys yet: an
+                        open link and the current version's deploy time come
+                        with the Preflight and Production slices. */}
+                    <td className="muted">not deployed</td>
+                    <td className="muted">—</td>
+                    <td className="muted">not deployed</td>
+                    <td className="muted">—</td>
                     <td>
                       <Time at={a.createdAt} />
                     </td>

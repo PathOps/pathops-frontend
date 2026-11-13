@@ -82,10 +82,18 @@ export function seconds(a: string | null, b: string | null): number | null {
 
 // Copy is a value with a button that copies it (or text, when shown short).
 export function Copy({ text, children }: { text: string; children?: ReactNode }) {
+  return (
+    <>
+      {children ?? <code>{text}</code>} <CopyButton text={text} />
+    </>
+  );
+}
+
+// CopyButton copies text it does not show.
+export function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <>
-      {children ?? <code>{text}</code>}{" "}
       <button
         type="button"
         aria-label={`Copy ${text}`}

@@ -39,6 +39,9 @@ describe("Applications", () => {
     expect(await screen.findByRole("link", { name: "manual-web" })).toHaveAttribute("href", `/applications/${f.appId}`);
     expect(screen.getByText(/any · container · Dockerfile \(BuildKit\)/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    for (const c of ["Production", "Production deploy", "Preflight", "Preflight deploy"])
+      expect(screen.getByRole("columnheader", { name: c })).toBeInTheDocument();
+    expect(screen.getAllByText("not deployed")).toHaveLength(2);
   });
 
   it("shows an empty list", async () => {
@@ -113,20 +116,26 @@ describe("Application", () => {
     expect(src).toHaveAttribute("rel", "noopener noreferrer");
     expect(screen.getByRole("link", { name: "alice/manual-web-gitops-production ↗" })).toBeInTheDocument();
     expect(screen.getByText("gitops-preflight")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Clone" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Branch" })).not.toBeInTheDocument();
   });
 
-  it("lists images with their tag, digest and build", async () => {
+  it("lists images with their tag, digest, build and a copy of the pinned reference", async () => {
     renderAt(`/applications/${f.appId}/images`, fakeApi(all));
-    expect(await screen.findByText(`zot-canary.demo.pathops.io/apps/${f.appId}`)).toBeInTheDocument();
-    expect(screen.getByTitle(f.digest)).toBeInTheDocument();
+    expect(await screen.findByTitle(f.digest)).toBeInTheDocument();
+    expect(screen.queryByText(/^Repository:/)).not.toBeInTheDocument();
     expect(screen.getByText("274af150e590")).toBeInTheDocument();
     const section = screen.getByRole("region", { name: "Images" });
+    expect(within(section).getAllByRole("button", { name: /^Copy / }).map((b) => b.getAttribute("aria-label"))).toEqual([
+      `Copy zot-canary.demo.pathops.io/apps/${f.appId}@${f.digest}`,
+    ]);
     expect(within(section).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
   });
 
-  it("lists builds by number with their run", async () => {
+  it("lists builds by number with their delivery", async () => {
     renderAt(`/applications/${f.appId}/builds`, fakeApi({ ...all, [`${app}/builds`]: { builds: [f.buildBad, f.buildOk] } }));
     const links = await screen.findAllByRole("link", { name: "#2" });
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["#", "Commit", "Status", "Delivery", "Started", "Duration"]);
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       `/applications/${f.appId}/builds/build-bad`,
       `/applications/${f.appId}/deliveries/run-bad`,
@@ -139,6 +148,7 @@ describe("Application", () => {
     const runs = await within(section).findAllByRole("link", { name: /^#\d+$/ });
     expect(runs.map((l) => l.textContent)).toEqual(["#2", "#1"]);
     expect(runs[1]).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    expect(within(section).getAllByRole("columnheader")[0]).toHaveTextContent(/^#$/);
     expect(section).toHaveTextContent("202161553024");
   });
 });

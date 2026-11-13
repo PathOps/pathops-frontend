@@ -1,6 +1,6 @@
 import type { Repositories } from "../api/types";
 import { useResource } from "../api/useResource";
-import { Copy, ExternalLink, Loaded, Time } from "../components/ui";
+import { ExternalLink, Loaded, Time } from "../components/ui";
 
 const roles: Record<string, string> = { source: "source", preflight: "gitops-preflight", production: "gitops-production" };
 
@@ -18,8 +18,6 @@ export function RepositoriesSection({ appId }: { appId: string }) {
                   <tr>
                     <th>Type</th>
                     <th>Repository</th>
-                    <th>Branch</th>
-                    <th>Clone</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -27,10 +25,6 @@ export function RepositoriesSection({ appId }: { appId: string }) {
                     <tr key={repo.role}>
                       <td>{roles[repo.role] ?? repo.role}</td>
                       <td>{repo.url ? <ExternalLink href={repo.url}>{repo.fullName}</ExternalLink> : repo.fullName}</td>
-                      <td>{repo.defaultBranch}</td>
-                      <td>
-                        <Copy text={repo.cloneUrl} />
-                      </td>
                     </tr>
                   ))}
                 </tbody>
