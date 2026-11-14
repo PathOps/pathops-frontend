@@ -16,6 +16,8 @@
   --error: #c62828;
   --warning: #946200;
   --action: #555;
+  --log-bg: #000;
+  --log-fg: #fff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -33,6 +35,8 @@
     --error: #ff8585;
     --warning: #f4c16c;
     --action: #e9e9e9;
+    --log-bg: #fff;
+    --log-fg: #000;
   }
 }
 :root[data-theme="dark"] {
@@ -50,6 +54,8 @@
   --error: #ff8585;
   --warning: #f4c16c;
   --action: #e9e9e9;
+  --log-bg: #fff;
+  --log-fg: #000;
 }
 
 html,
@@ -226,6 +232,11 @@ small,
 }
 .log-box {
   position: relative;
+}
+/* A log contrasts with the page: black in the light theme, white in the dark. */
+.log-box pre {
+  background: var(--log-bg);
+  color: var(--log-fg);
 }
 /* Clear of the log's scrollbar. */
 .log-actions {
