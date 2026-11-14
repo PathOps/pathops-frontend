@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import { Duration } from "../components/ui";
 import type { DeliveryDetail } from "../api/types";
@@ -271,6 +271,27 @@ describe("Build", () => {
     expect(steps).toEqual(["3p", "2b", "1c"]);
     await userEvent.click(within(tasks).getAllByRole("button", { name: "View log" })[1]);
     const log = await screen.findByRole("log", { name: "Log of build" });
+    // Copy puts the whole log on the clipboard; Download saves it as <TaskRun>-<step>.log.
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await userEvent.click(within(log).getByRole("button", { name: "Copy log of build" }));
+    expect(writeText).toHaveBeenCalledWith(f.buildLog.content);
+    const created: Blob[] = [];
+    URL.createObjectURL = vi.fn((b: Blob) => (created.push(b), "blob:log"));
+    URL.revokeObjectURL = vi.fn();
+    let saved = "";
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      saved = this.download;
+    });
+    await userEvent.click(within(log).getByRole("button", { name: "⤓ Download" }));
+    expect(saved).toBe("build-build-ok-build-image-build.log");
+    const text = await new Promise<string>((done) => {
+      const reader = new FileReader();
+      reader.onload = () => done(reader.result as string);
+      reader.readAsText(created[0]);
+    });
+    expect(text).toBe(f.buildLog.content);
+    click.mockRestore();
     expect(log).toHaveTextContent("exporting to oci image format");
     expect(log).toHaveTextContent("Truncated: the last 4000 lines, at most 256 KiB.");
   });

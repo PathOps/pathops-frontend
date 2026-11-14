@@ -199,7 +199,8 @@ small,
 .log-row > td {
   padding: 0;
 }
-.log-row p {
+.log-row p,
+.log-row .toolbar {
   margin: 9px;
 }
 .centered {

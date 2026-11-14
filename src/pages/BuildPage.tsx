@@ -5,6 +5,7 @@ import { running, useResource } from "../api/useResource";
 import { Page } from "../components/Page";
 import {
   Copy,
+  CopyButton,
   Duration,
   ErrorBox,
   Fact,
@@ -335,6 +336,26 @@ function StepTable({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunV
   );
 }
 
+// DownloadButton saves text as a file, made in the browser (nothing is
+// fetched again).
+function DownloadButton({ text, filename }: { text: string; filename: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }}
+    >
+      ⤓ Download
+    </button>
+  );
+}
+
 // LogViewer shows one step's log as the Tenant CP bounds it: the last lines,
 // marked when truncated, scrolled to its end (what happened last). Not
 // streamed (Decision 0060 §11).
@@ -351,13 +372,20 @@ export function LogViewer({ buildId, taskRun, step }: { buildId: string; taskRun
   if (!r.data) return <p className="muted" role="status">Loading the log…</p>;
   return (
     <div aria-label={`Log of ${step}`} role="log">
-      {r.data.truncated && (
-        <p>
+      <Toolbar
+        actions={
+          <>
+            <CopyButton text={r.data.content} label={`log of ${step}`} />{" "}
+            <DownloadButton text={r.data.content} filename={`${taskRun}-${step}.log`} />
+          </>
+        }
+      >
+        {r.data.truncated && (
           <small>
             Truncated: the last {r.data.tailLines} lines, at most {Math.round(r.data.limitBytes / 1024)} KiB.
           </small>
-        </p>
-      )}
+        )}
+      </Toolbar>
       <pre ref={pre}>{r.data.content || "(empty)"}</pre>
     </div>
   );

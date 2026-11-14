@@ -114,14 +114,15 @@ export function Copy({ text, children }: { text: string; children?: ReactNode })
   );
 }
 
-// CopyButton copies text it does not show.
-export function CopyButton({ text }: { text: string }) {
+// CopyButton copies text it does not show; label names it for a screen
+// reader when the text itself is too long to (a log).
+export function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <>
       <button
         type="button"
-        aria-label={`Copy ${text}`}
+        aria-label={`Copy ${label ?? text}`}
         onClick={() => {
           void navigator.clipboard?.writeText(text).then(() => setCopied(true));
         }}
