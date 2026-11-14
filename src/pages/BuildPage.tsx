@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { BuildDetail, Log, Overview, Tasks, TaskRunView } from "../api/types";
 import { running, useResource } from "../api/useResource";
@@ -228,11 +228,17 @@ function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunVie
 }
 
 // LogViewer shows one step's log as the Tenant CP bounds it: the last lines,
-// marked when truncated. Not streamed (Decision 0060 §11).
+// marked when truncated, scrolled to its end (what happened last). Not
+// streamed (Decision 0060 §11).
 export function LogViewer({ buildId, taskRun, step }: { buildId: string; taskRun: string; step: string }) {
   const r = useResource<Log>(
     `/api/v1/builds/${encodeURIComponent(buildId)}/tasks/${encodeURIComponent(taskRun)}/logs?step=${encodeURIComponent(step)}`,
   );
+  const pre = useRef<HTMLPreElement>(null);
+  const content = r.data?.content;
+  useEffect(() => {
+    if (pre.current) pre.current.scrollTop = pre.current.scrollHeight;
+  }, [content]);
   if (r.error) return <ErrorBox error={r.error} />;
   if (!r.data) return <p className="muted" role="status">Loading the log…</p>;
   return (
@@ -244,7 +250,7 @@ export function LogViewer({ buildId, taskRun, step }: { buildId: string; taskRun
           </small>
         </p>
       )}
-      <pre>{r.data.content || "(empty)"}</pre>
+      <pre ref={pre}>{r.data.content || "(empty)"}</pre>
     </div>
   );
 }

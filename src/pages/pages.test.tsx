@@ -177,6 +177,7 @@ describe("Delivery run", () => {
     renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
     expect(await screen.findByRole("heading", { level: 1, name: "Delivery #1" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Delivery run" })).toHaveTextContent(f.okRev);
+    expect(within(screen.getByRole("table", { name: "Delivery run" })).getAllByRole("rowheader")[0]).toHaveTextContent("Run ID");
     const steps = screen.getByRole("table", { name: "Delivery steps" });
     expect(steps).toHaveTextContent("Build application");
     expect(within(steps).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
@@ -284,5 +285,6 @@ describe("Theme", () => {
     await within(header).findByText("alice@example.test");
     expect(header.textContent).toMatch(/mode\s*alice@example\.test\s*Sign out$/);
     expect(header).not.toHaveTextContent("canary");
+    expect(within(header).queryByRole("button", { name: "alice@example.test" })).not.toBeInTheDocument();
   });
 });

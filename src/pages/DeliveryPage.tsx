@@ -158,6 +158,9 @@ export function DeliveryPage() {
             <h1>Delivery #{d.number}</h1>
             <Toolbar actions={<RefreshButton resource={r} />} />
             <Facts label="Delivery run">
+              <Fact label="Run ID">
+                <code>{d.id}</code>
+              </Fact>
               <Fact label="Status">
                 <Status status={d.status} />
               </Fact>
@@ -184,9 +187,6 @@ export function DeliveryPage() {
                 <Duration seconds={d.durationSeconds} />
               </Fact>
               <Fact label="Webhook delivery">{d.webhookDeliveryId || <span className="muted">—</span>}</Fact>
-              <Fact label="Run ID">
-                <code>{d.id}</code>
-              </Fact>
             </Facts>
             <h2>Steps</h2>
             <Steps appId={appId} steps={d.steps} />

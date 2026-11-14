@@ -61,7 +61,7 @@ export function Page({ crumbs, children }: { crumbs?: ReactNode; children: React
         </nav>
         <span className="spacer" />
         <ThemeToggle />
-        {me.data && <small>{me.data.email ?? me.data.name ?? me.data.subject}</small>}
+        {me.data && <span className="user">{me.data.email ?? me.data.name ?? me.data.subject}</span>}
         <button
           type="button"
           onClick={() => {

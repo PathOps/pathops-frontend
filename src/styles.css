@@ -127,13 +127,22 @@ pre {
 .detail {
   overflow-wrap: anywhere;
 }
-button {
-  cursor: pointer;
+button,
+header .user {
   font: inherit;
   background: var(--button);
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 2px;
+  padding: 1px 6px;
+}
+button {
+  cursor: pointer;
+}
+/* The signed-in user looks like the header's buttons but does nothing. */
+header .user {
+  cursor: default;
+  user-select: text;
 }
 button[aria-selected="true"],
 nav.tabs a.active {
@@ -191,6 +200,12 @@ small,
 .centered {
   text-align: center;
   margin-top: 30vh;
+}
+/* Room for three dots, so the line does not move while they come and go. */
+.dots {
+  display: inline-block;
+  width: 1.2em;
+  text-align: left;
 }
 ul.tree,
 ul.tree ul {

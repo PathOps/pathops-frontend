@@ -7,6 +7,23 @@ import { ApplicationsPage } from "./pages/ApplicationsPage";
 import { BuildPage } from "./pages/BuildPage";
 import { DeliveryPage } from "./pages/DeliveryPage";
 
+// SigningInNotice is "Signing in" with dots that come and go (none, one,
+// two, three, again).
+function SigningInNotice() {
+  const [dots, setDots] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setDots((d) => (d + 1) % 4), 400);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <main>
+      <p className="muted centered" role="status" aria-label="Signing in">
+        Signing in<span className="dots">{".".repeat(dots)}</span>
+      </p>
+    </main>
+  );
+}
+
 // Routes. /api, /.well-known and /healthz are the Tenant CP's at this origin;
 // everything else is this application's.
 export function AppRoutes() {
@@ -41,7 +58,7 @@ function Signed({ children }: { children: ReactNode }) {
     }
   }, [ready]);
   if (error) return <main><p className="error" role="alert">Cannot sign in: {error}</p></main>;
-  if (!ready) return <main><p className="muted centered" role="status">Signing in…</p></main>;
+  if (!ready) return <SigningInNotice />;
   return <>{children}</>;
 }
 
@@ -64,7 +81,7 @@ function Callback() {
         <a href="/">Try again</a>
       </main>
     );
-  return <main><p className="muted centered" role="status">Signing in…</p></main>;
+  return <SigningInNotice />;
 }
 
 function SignedOut() {
