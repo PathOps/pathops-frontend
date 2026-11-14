@@ -215,6 +215,10 @@ small,
 .level table {
   margin: 8px 0;
 }
+.level th,
+.level strong {
+  white-space: nowrap;
+}
 @media (max-width: 650px) {
   body {
     margin: 14px auto;

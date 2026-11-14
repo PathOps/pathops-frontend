@@ -117,7 +117,8 @@ function Steps({ appId, steps }: { appId: string; steps: DeliveryStep[] }) {
                     </button>
                   </td>
                 </tr>
-                {s.sanitizedError && (
+                {/* A build's error shows under the Build in its tree. */}
+                {s.sanitizedError && !s.build && (
                   <tr>
                     <td />
                     <td colSpan={6} className="error">

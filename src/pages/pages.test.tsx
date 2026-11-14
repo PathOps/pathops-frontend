@@ -1,7 +1,8 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api/client";
+import { Duration } from "../components/ui";
 import type { DeliveryDetail } from "../api/types";
 import { fakeApi, renderAt } from "../test/render";
 import * as f from "../test/fixtures";
@@ -198,6 +199,10 @@ describe("Delivery run", () => {
     const tree = await screen.findByRole("group", { name: "Build tree" });
     expect(tree).toHaveTextContent("manual-web-ci/build-b");
     expect(tree).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
+    // The build's error shows once, under the Build; the PipelineRun's name is cut short.
+    const steps = screen.getByRole("table", { name: "Delivery steps" });
+    expect(within(steps).getAllByText(/^the PipelineRun manual-web-ci\/build-b failed/)).toHaveLength(1);
+    expect(within(tree).getByTitle("manual-web-ci/build-b")).toHaveTextContent("build-b");
     expect(within(within(tree).getByRole("table", { name: "Build summary" })).getByRole("link", { name: "#2" })).toHaveAttribute(
       "href",
       `/applications/${f.appId}/builds/build-bad`,
@@ -295,5 +300,17 @@ describe("Theme", () => {
     expect(header.textContent).toMatch(/mode\s*alice@example\.test\s*Sign out$/);
     expect(header).not.toHaveTextContent("canary");
     expect(within(header).queryByRole("button", { name: "alice@example.test" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Duration", () => {
+  it("shows a negative duration (an end reported before the start) as unknown", () => {
+    render(
+      <>
+        <Duration seconds={-4} />|<Duration seconds={6} />
+      </>,
+    );
+    expect(screen.getByTitle("The reported end precedes the start")).toHaveTextContent("—");
+    expect(document.body).toHaveTextContent("—|6s");
   });
 });

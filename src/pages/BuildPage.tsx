@@ -134,6 +134,10 @@ export function PipelineRunFacts({ build }: { build: BuildDetail }) {
   );
 }
 
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n)}…` : s;
+}
+
 // PipelineRunRow is a build's PipelineRun as one summary row, or why Tekton
 // cannot tell.
 export function PipelineRunRow({ build }: { build: BuildDetail }) {
@@ -152,7 +156,8 @@ export function PipelineRunRow({ build }: { build: BuildDetail }) {
       <tbody>
         <tr>
           <td>
-            <code>{build.pipelineRun.name}</code>
+            {/* Its full name is on the Build page (and on hover). */}
+            <code title={`${build.pipelineRun.namespace}/${build.pipelineRun.name}`}>{truncate(build.pipelineRun.name, 14)}</code>
           </td>
           {pr ? (
             <>
