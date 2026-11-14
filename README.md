@@ -61,8 +61,9 @@ Application (`#N`, from the Tenant Control Plane).
 - **Delivery run**: its facts (commit, source, times, error), its DeliverySteps
   latest first (a new step type appears without a UI change), and the OCI
   image (or "No image"). A step's details are its build tree, one
-  summary row per Build, PipelineRun and TaskRun, then the steps, each level
-  indented one further; a failed step starts open.
+  summary row per Build, PipelineRun and TaskRun, then the steps, one table
+  under the other; a failed step starts open. A step's error shows once, as
+  the run's Error (under the step only when it has no build).
 - **Build**: its facts (Build ID first) and delivery, the PipelineRun's status
   and results (named in words: Image Digest), its TaskRuns (each a facts
   table) and their steps, numbered in execution order. Each step's log (the last 4000 lines, at most

@@ -20,9 +20,8 @@ import {
 } from "../components/ui";
 import { AppCrumbs, PipelineRunRow, TaskRunList } from "./BuildPage";
 
-// BuildTree is a step's build as a tree of one-row summaries, each level
-// indented: the Build, its PipelineRun, its TaskRuns, their steps (each
-// with its log).
+// BuildTree is a step's build as one-row summaries, one under the other:
+// the Build, its PipelineRun, its TaskRuns, their steps (each with its log).
 function BuildTree({ appId, buildId }: { appId: string; buildId: string }) {
   const b = useResource<BuildDetail>(`/api/v1/builds/${encodeURIComponent(buildId)}`, { pollWhile: (d) => running(d.status) });
   return (
@@ -117,7 +116,8 @@ function Steps({ appId, steps }: { appId: string; steps: DeliveryStep[] }) {
                     </button>
                   </td>
                 </tr>
-                {s.sanitizedError && (
+                {/* A build's error is the run's (its Error fact): no row again. */}
+                {s.sanitizedError && !s.build && (
                   <tr>
                     <td />
                     <td colSpan={6} className="error">

@@ -193,7 +193,8 @@ describe("Delivery run", () => {
   it("shows a failed run's error and no image", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
     expect(await screen.findByRole("alert")).toHaveTextContent("BUILD_APPLICATION: the PipelineRun manual-web-ci/build-b failed (Failed)");
-    expect(screen.getByRole("table", { name: "Delivery steps" })).toHaveTextContent("the PipelineRun manual-web-ci/build-b failed (Failed)");
+    // The step's error is the run's: shown once, in the run's facts.
+    expect(screen.getByRole("table", { name: "Delivery steps" })).not.toHaveTextContent("failed (Failed)");
     expect(screen.getByText("No image: the run failed, nothing was published.")).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Image" })).toBeNull();
   });
@@ -202,16 +203,15 @@ describe("Delivery run", () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
     const tree = await screen.findByRole("group", { name: "Build tree" });
     expect(tree).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
-    // The build's error shows once, under its step; the PipelineRun's name is cut short.
+    // No error row under a step with a build; the PipelineRun's name is cut short.
     const steps = screen.getByRole("table", { name: "Delivery steps" });
-    expect(within(steps).getAllByText(/^the PipelineRun manual-web-ci\/build-b failed/)).toHaveLength(1);
-    expect(tree).not.toHaveTextContent("failed (Failed)");
+    expect(within(steps).queryByText(/^the PipelineRun manual-web-ci\/build-b failed/)).toBeNull();
     expect(within(tree).getByTitle("manual-web-ci/build-b")).toHaveTextContent("build-b");
     expect(within(within(tree).getByRole("table", { name: "Build summary" })).getByRole("link", { name: "#2" })).toHaveAttribute(
       "href",
       `/applications/${f.appId}/builds/build-bad`,
     );
-    // One summary row per level, each level one indent further in.
+    // One summary row per level, one under the other.
     const pr = within(tree).getByRole("table", { name: "PipelineRun" });
     expect(pr.querySelectorAll(":scope > tbody > tr")).toHaveLength(1);
     expect(pr.parentElement).toHaveClass("level");
