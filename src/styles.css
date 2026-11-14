@@ -15,6 +15,7 @@
   --ok: #16803c;
   --error: #c62828;
   --warning: #946200;
+  --shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -31,6 +32,7 @@
     --ok: #67d391;
     --error: #ff8585;
     --warning: #f4c16c;
+    --shadow: 0 2px 8px 1px #000;
   }
 }
 :root[data-theme="dark"] {
@@ -47,6 +49,7 @@
   --ok: #67d391;
   --error: #ff8585;
   --warning: #f4c16c;
+  --shadow: 0 2px 8px 1px #000;
 }
 
 html,
@@ -231,6 +234,10 @@ small,
   right: 22px;
   display: flex;
   gap: 4px;
+}
+/* A subtle shadow: the buttons float over the log's text. */
+.log-actions button {
+  box-shadow: var(--shadow);
 }
 .centered {
   text-align: center;
