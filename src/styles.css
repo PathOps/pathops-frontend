@@ -15,7 +15,7 @@
   --ok: #16803c;
   --error: #c62828;
   --warning: #946200;
-  --shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  --action: #555;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -32,7 +32,7 @@
     --ok: #67d391;
     --error: #ff8585;
     --warning: #f4c16c;
-    --shadow: 0 2px 8px 1px #000;
+    --action: #e9e9e9;
   }
 }
 :root[data-theme="dark"] {
@@ -49,7 +49,7 @@
   --ok: #67d391;
   --error: #ff8585;
   --warning: #f4c16c;
-  --shadow: 0 2px 8px 1px #000;
+  --action: #e9e9e9;
 }
 
 html,
@@ -235,9 +235,15 @@ small,
   display: flex;
   gap: 4px;
 }
-/* A subtle shadow: the buttons float over the log's text. */
+/* Inverted (dark on a light log, light on a dark one): the buttons stand
+   out over the log's text. */
 .log-actions button {
-  box-shadow: var(--shadow);
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--bg);
+}
+.log-actions button:hover {
+  opacity: 0.85;
 }
 .centered {
   text-align: center;
