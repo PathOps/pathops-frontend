@@ -69,6 +69,11 @@ header {
   border-bottom: 1px solid var(--border);
   padding-bottom: 10px;
 }
+footer {
+  border-top: 1px solid var(--border);
+  margin-top: 40px;
+  padding-top: 10px;
+}
 header .spacer {
   flex: 1;
 }

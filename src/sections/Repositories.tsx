@@ -1,6 +1,6 @@
 import type { Repositories } from "../api/types";
 import { useResource } from "../api/useResource";
-import { ExternalLink, Loaded, Time } from "../components/ui";
+import { ExternalLink, Loaded, RefreshButton, Toolbar } from "../components/ui";
 
 const roles: Record<string, string> = { source: "source", preflight: "gitops-preflight", production: "gitops-production" };
 
@@ -18,6 +18,9 @@ export function RepositoriesSection({ appId }: { appId: string }) {
   return (
     <>
       <h2>Repositories</h2>
+      <Toolbar actions={<RefreshButton resource={r} />}>
+        The application's source code and the GitOps repositories of its environments, in Forgejo.
+      </Toolbar>
       <Loaded resource={r} empty={(d) => d.repositories.length === 0}>
         {(d) => (
           <>
@@ -39,11 +42,6 @@ export function RepositoriesSection({ appId }: { appId: string }) {
                 </tbody>
               </table>
             </div>
-            {d.webhook && (
-              <p className="muted">
-                Source webhook: {d.webhook.events.join(", ")} · last push received <Time at={d.webhook.lastDeliveryAt} />
-              </p>
-            )}
           </>
         )}
       </Loaded>

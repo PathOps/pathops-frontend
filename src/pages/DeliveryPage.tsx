@@ -59,7 +59,7 @@ function BuildTree({ appId, buildId }: { appId: string; buildId: string }) {
               </tr>
             </tbody>
           </table>
-          {d.sanitizedError && <p className="error">{d.sanitizedError}</p>}
+          {/* The build's error is its step's, shown under the step. */}
           <div className="level">
             <PipelineRunRow build={d} />
             <div className="level">
@@ -117,8 +117,7 @@ function Steps({ appId, steps }: { appId: string; steps: DeliveryStep[] }) {
                     </button>
                   </td>
                 </tr>
-                {/* A build's error shows under the Build in its tree. */}
-                {s.sanitizedError && !s.build && (
+                {s.sanitizedError && (
                   <tr>
                     <td />
                     <td colSpan={6} className="error">

@@ -48,7 +48,8 @@ function ThemeToggle() {
 }
 
 // Page is a page of the signed-in UI: the breadcrumb (PathOps / Applications
-// / ... / here), the theme, the user and sign out, then the content.
+// / ... / here), the theme, the user and sign out, then the content and the
+// footer.
 export function Page({ crumbs, children }: { crumbs?: ReactNode; children: ReactNode }) {
   const me = useResource<Me>("/api/v1/me");
   const [out, setOut] = useState(false);
@@ -74,6 +75,14 @@ export function Page({ crumbs, children }: { crumbs?: ReactNode; children: React
         {out && <Navigate to="/signed-out" replace />}
       </header>
       <main>{children}</main>
+      <footer>
+        <small>
+          © 2026 PathOps · Open source under the{" "}
+          <a href="https://github.com/PathOps/pathops-frontend/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
+            MIT License ↗
+          </a>
+        </small>
+      </footer>
     </>
   );
 }

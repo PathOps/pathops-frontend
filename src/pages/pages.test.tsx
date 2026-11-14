@@ -138,6 +138,9 @@ describe("Application", () => {
     expect(screen.getByText("gitops-preflight")).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Clone" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Branch" })).not.toBeInTheDocument();
+    const section = screen.getByRole("region", { name: "Repositories" });
+    expect(within(section).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    expect(section).not.toHaveTextContent("Source webhook");
   });
 
   it("lists images with their tag, digest, build and a copy of the pinned reference", async () => {
@@ -146,6 +149,7 @@ describe("Application", () => {
     expect(screen.queryByText(/^Repository:/)).not.toBeInTheDocument();
     expect(screen.getByText("274af150e590")).toBeInTheDocument();
     const section = screen.getByRole("region", { name: "Images" });
+    expect(within(section).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
     expect(within(section).getAllByRole("button", { name: /^Copy / }).map((b) => b.getAttribute("aria-label"))).toEqual([
       `Copy zot-canary.demo.pathops.io/apps/${f.appId}@${f.digest}`,
     ]);
@@ -197,11 +201,11 @@ describe("Delivery run", () => {
   it("opens a failed step as its build tree, with one step's log open at a time under its step", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
     const tree = await screen.findByRole("group", { name: "Build tree" });
-    expect(tree).toHaveTextContent("manual-web-ci/build-b");
     expect(tree).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
-    // The build's error shows once, under the Build; the PipelineRun's name is cut short.
+    // The build's error shows once, under its step; the PipelineRun's name is cut short.
     const steps = screen.getByRole("table", { name: "Delivery steps" });
     expect(within(steps).getAllByText(/^the PipelineRun manual-web-ci\/build-b failed/)).toHaveLength(1);
+    expect(tree).not.toHaveTextContent("failed (Failed)");
     expect(within(tree).getByTitle("manual-web-ci/build-b")).toHaveTextContent("build-b");
     expect(within(within(tree).getByRole("table", { name: "Build summary" })).getByRole("link", { name: "#2" })).toHaveAttribute(
       "href",
@@ -299,6 +303,7 @@ describe("Theme", () => {
     await within(header).findByText("alice@example.test");
     expect(header.textContent).toMatch(/mode\s*alice@example\.test\s*Sign out$/);
     expect(header).not.toHaveTextContent("canary");
+    expect(screen.getByRole("contentinfo")).toHaveTextContent("© 2026 PathOps · Open source under the MIT License");
     expect(within(header).queryByRole("button", { name: "alice@example.test" })).not.toBeInTheDocument();
   });
 });

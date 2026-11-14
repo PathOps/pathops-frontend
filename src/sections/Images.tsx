@@ -1,13 +1,13 @@
 import type { ImageEntry } from "../api/types";
 import { useResource } from "../api/useResource";
-import { BuildLink, CopyButton, Loaded, Short, Time } from "../components/ui";
+import { BuildLink, CopyButton, Loaded, RefreshButton, Short, Time, Toolbar } from "../components/ui";
 
 export function Images({ appId }: { appId: string }) {
   const r = useResource<{ images: ImageEntry[] }>(`/api/v1/applications/${appId}/images`);
   return (
     <>
       <h2>Images</h2>
-      <p>OCI artifacts stored in zot.</p>
+      <Toolbar actions={<RefreshButton resource={r} />}>OCI artifacts stored in zot.</Toolbar>
       <Loaded resource={r} empty={(d) => d.images.length === 0}>
         {(d) => (
           <>
