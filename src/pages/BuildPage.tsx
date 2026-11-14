@@ -372,21 +372,22 @@ export function LogViewer({ buildId, taskRun, step }: { buildId: string; taskRun
   if (!r.data) return <p className="muted" role="status">Loading the log…</p>;
   return (
     <div aria-label={`Log of ${step}`} role="log">
-      <Toolbar
-        actions={
-          <>
-            <CopyButton text={r.data.content} label={`log of ${step}`} />{" "}
-            <DownloadButton text={r.data.content} filename={`${taskRun}-${step}.log`} />
-          </>
-        }
-      >
-        {r.data.truncated && (
+      {r.data.truncated && (
+        <p>
           <small>
             Truncated: the last {r.data.tailLines} lines, at most {Math.round(r.data.limitBytes / 1024)} KiB.
           </small>
-        )}
-      </Toolbar>
-      <pre ref={pre}>{r.data.content || "(empty)"}</pre>
+        </p>
+      )}
+      {/* The actions float over the log's top right corner, outside its
+          scroll, so they stay put while it scrolls. */}
+      <div className="log-box">
+        <pre ref={pre}>{r.data.content || "(empty)"}</pre>
+        <div className="log-actions">
+          <CopyButton text={r.data.content} label={`log of ${step}`} />
+          <DownloadButton text={r.data.content} filename={`${taskRun}-${step}.log`} />
+        </div>
+      </div>
     </div>
   );
 }

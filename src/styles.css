@@ -199,9 +199,19 @@ small,
 .log-row > td {
   padding: 0;
 }
-.log-row p,
-.log-row .toolbar {
+.log-row p {
   margin: 9px;
+}
+.log-box {
+  position: relative;
+}
+/* Clear of the log's scrollbar. */
+.log-actions {
+  position: absolute;
+  top: 8px;
+  right: 22px;
+  display: flex;
+  gap: 4px;
 }
 .centered {
   text-align: center;
