@@ -62,7 +62,7 @@ Application (`#N`, from the Tenant Control Plane).
   latest first (a new step type appears without a UI change), and the OCI
   image (or "No image"). A step's details are its build tree, one
   summary row per Build, PipelineRun and TaskRun, then the steps, each level
-  a short indent in and hung from its parent by a dashed guide line; a failed
+  a short indent in and hung from its parent by a dashed right angle; a failed
   step starts open. A step's error shows once, as
   the run's Error (under the step only when it has no build).
 - **Build**: its facts (Build ID first) and delivery, the PipelineRun's status
