@@ -89,14 +89,9 @@ export function Ago({ at, now = Date.now() }: { at: string | null | undefined; n
 
 export function Duration({ seconds }: { seconds: number | null | undefined }) {
   if (seconds === null || seconds === undefined) return <span className="muted">—</span>;
-  // Tekton can report a step that ends before it starts: its start comes from
-  // the step's entrypoint, its end from the container runtime.
-  if (seconds < 0)
-    return (
-      <span className="muted" title="The reported end precedes the start">
-        —
-      </span>
-    );
+  // Tekton can report a step that ends before it starts (its start comes
+  // from the step's entrypoint, its end from the container runtime): 0s.
+  if (seconds < 0) return <span title="The reported end precedes the start">0s</span>;
   if (seconds < 60) return <span>{Math.round(seconds)}s</span>;
   const m = Math.floor(seconds / 60);
   return (

@@ -304,13 +304,13 @@ describe("Theme", () => {
 });
 
 describe("Duration", () => {
-  it("shows a negative duration (an end reported before the start) as unknown", () => {
+  it("shows a negative duration (an end reported before the start) as 0s", () => {
     render(
       <>
         <Duration seconds={-4} />|<Duration seconds={6} />
       </>,
     );
-    expect(screen.getByTitle("The reported end precedes the start")).toHaveTextContent("—");
-    expect(document.body).toHaveTextContent("—|6s");
+    expect(screen.getByTitle("The reported end precedes the start")).toHaveTextContent("0s");
+    expect(document.body).toHaveTextContent("0s|6s");
   });
 });
