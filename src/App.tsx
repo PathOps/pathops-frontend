@@ -41,7 +41,7 @@ function Signed({ children }: { children: ReactNode }) {
     }
   }, [ready]);
   if (error) return <main><p className="error" role="alert">Cannot sign in: {error}</p></main>;
-  if (!ready) return <main><p className="muted" role="status">Signing in…</p></main>;
+  if (!ready) return <main><p className="muted centered" role="status">Signing in…</p></main>;
   return <>{children}</>;
 }
 
@@ -64,7 +64,7 @@ function Callback() {
         <a href="/">Try again</a>
       </main>
     );
-  return <main><p className="muted" role="status">Signing in…</p></main>;
+  return <main><p className="muted centered" role="status">Signing in…</p></main>;
 }
 
 function SignedOut() {

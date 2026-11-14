@@ -44,10 +44,11 @@ and a dark theme (the system's, or the user's choice). Everything temporal is
 latest first; DeliveryRuns and Builds are named by their number within the
 Application (`#N`, from the Tenant Control Plane).
 
-- **Applications**: a table of the user's Applications: technology, template,
-  provisioning, last delivery (`#N` and status), and Production and Preflight
-  (an open link and the current version's deploy time; "not deployed" until
-  the Tenant Control Plane records environment deploys).
+- **Applications**: a table of the user's Applications: Production and
+  Preflight (health, an "Open app" link and how long ago the current version
+  was deployed, as `3s`, `5m`, `1h`, `3d`; "not deployed" until the Tenant
+  Control Plane returns environments), last delivery (`#N` and status),
+  provisioning and creation time.
 - **Application**: the Application ID, a summary (technology, template link,
   last delivery, provisioning; Production and Preflight "not created yet")
   and the tabs Production, Preflight, Delivery, Validations, Images, Builds,
@@ -62,7 +63,8 @@ Application (`#N`, from the Tenant Control Plane).
   image (or "No image"). A step's details are its build tree: Build ->
   PipelineRun -> TaskRuns -> steps; a failed step starts open.
 - **Build**: its facts (Build ID first) and delivery, the PipelineRun's status
-  and results, its TaskRuns (each a facts table) and their steps. Each step's log (the last 4000 lines, at most
+  and results (named in words: Image Digest), its TaskRuns (each a facts
+  table) and their steps, numbered in execution order. Each step's log (the last 4000 lines, at most
   256 KiB, as the Tenant Control Plane bounds it; not streamed) opens in the
   row under the step, one at a time.
 

@@ -22,6 +22,15 @@ export interface DeliveryRef {
   completedAt: Iso | null;
 }
 
+// EnvironmentRef is an Application's environment (Production, Preflight):
+// its health, where the app answers and when its current version was
+// deployed. The Tenant CP does not return it yet (absent: not deployed).
+export interface EnvironmentRef {
+  status: string;
+  url?: string;
+  deployedAt: Iso | null;
+}
+
 export interface ApplicationSummary {
   id: string;
   name: string;
@@ -30,6 +39,8 @@ export interface ApplicationSummary {
   technology: Technology | null;
   provisioning: { status: string; completedAt: Iso | null };
   lastDelivery: DeliveryRef | null;
+  production?: EnvironmentRef | null;
+  preflight?: EnvironmentRef | null;
   createdAt: Iso;
 }
 

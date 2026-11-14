@@ -17,6 +17,7 @@ import {
   Toolbar,
   newestFirst,
   seconds,
+  title,
 } from "../components/ui";
 
 const observationText: Record<string, string> = {
@@ -123,7 +124,7 @@ export function PipelineRunFacts({ build }: { build: BuildDetail }) {
             <Time at={pr.completionTime} />
           </Fact>
           {pr.results.map((r) => (
-            <Fact key={r.name} label={r.name}>
+            <Fact key={r.name} label={title(r.name)}>
               <code>{r.value}</code>
             </Fact>
           ))}
@@ -180,6 +181,7 @@ function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunVie
         <table>
           <thead>
             <tr>
+              <th>#</th>
               <th>Step</th>
               <th>State</th>
               <th>Exit code</th>
@@ -188,11 +190,12 @@ function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunVie
             </tr>
           </thead>
           <tbody>
-            {newestFirst(tr.steps).map((s) => {
+            {newestFirst(tr.steps.map((s, i) => ({ ...s, order: i + 1 }))).map((s) => {
               const key = `${tr.name}/${s.name}`;
               return (
                 <Fragment key={s.name}>
                   <tr>
+                    <td>{s.order}</td>
                     <td>{s.name}</td>
                     <td>
                       <Status status={s.exitCode === null ? s.state : s.exitCode === 0 ? "SUCCEEDED" : "FAILED"} label={s.reason || s.state} />
@@ -209,7 +212,7 @@ function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunVie
                   </tr>
                   {open === key && (
                     <tr className="log-row">
-                      <td colSpan={5}>
+                      <td colSpan={6}>
                         <LogViewer buildId={buildId} taskRun={tr.name} step={s.name} />
                       </td>
                     </tr>

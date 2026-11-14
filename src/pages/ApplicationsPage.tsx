@@ -1,12 +1,31 @@
 import { Link } from "react-router-dom";
-import type { ApplicationSummary, Technology } from "../api/types";
+import type { ApplicationSummary, EnvironmentRef, Technology } from "../api/types";
 import { useResource } from "../api/useResource";
 import { Page } from "../components/Page";
-import { Loaded, RefreshButton, RunLink, Status, Time, Toolbar } from "../components/ui";
+import { Ago, ExternalLink, Loaded, RefreshButton, RunLink, Status, Time, Toolbar } from "../components/ui";
 
 export function technologyLine(t: Technology | null): string {
   if (!t) return "Technology not declared";
   return [t.language, t.framework, t.runtime, t.build].filter(Boolean).join(" · ");
+}
+
+// Environment is "Healthy — Open app ↗ — 3s": health, the app's link and
+// how long ago its current version was deployed.
+function Environment({ env }: { env: EnvironmentRef | null | undefined }) {
+  if (!env) return <span className="muted">not deployed</span>;
+  return (
+    <>
+      <Status status={env.status} />
+      {env.url && (
+        <>
+          {" — "}
+          <ExternalLink href={env.url}>Open app</ExternalLink>
+        </>
+      )}
+      {" — "}
+      <Ago at={env.deployedAt} />
+    </>
+  );
 }
 
 // ApplicationsPage lists the signed-in user's Applications.
@@ -23,14 +42,10 @@ export function ApplicationsPage() {
               <thead>
                 <tr>
                   <th>Application</th>
-                  <th>Technology</th>
-                  <th>Template</th>
-                  <th>Provisioning</th>
-                  <th>Last delivery</th>
                   <th>Production</th>
-                  <th>Production deploy</th>
                   <th>Preflight</th>
-                  <th>Preflight deploy</th>
+                  <th>Last delivery</th>
+                  <th>Provisioning</th>
                   <th>Created</th>
                 </tr>
               </thead>
@@ -40,10 +55,11 @@ export function ApplicationsPage() {
                     <td>
                       <Link to={`/applications/${a.id}`}>{a.name}</Link>
                     </td>
-                    <td>{technologyLine(a.technology)}</td>
-                    <td>{a.templateId}</td>
                     <td>
-                      <Status status={a.provisioning.status} />
+                      <Environment env={a.production} />
+                    </td>
+                    <td>
+                      <Environment env={a.preflight} />
                     </td>
                     <td>
                       {a.lastDelivery ? (
@@ -55,13 +71,9 @@ export function ApplicationsPage() {
                         <span className="muted">none yet</span>
                       )}
                     </td>
-                    {/* The Tenant CP records no environment deploys yet: an
-                        open link and the current version's deploy time come
-                        with the Preflight and Production slices. */}
-                    <td className="muted">not deployed</td>
-                    <td className="muted">—</td>
-                    <td className="muted">not deployed</td>
-                    <td className="muted">—</td>
+                    <td>
+                      <Status status={a.provisioning.status} />
+                    </td>
                     <td>
                       <Time at={a.createdAt} />
                     </td>

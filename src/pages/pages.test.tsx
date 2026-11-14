@@ -37,11 +37,26 @@ describe("Applications", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Loading");
     resolve(f.applications);
     expect(await screen.findByRole("link", { name: "manual-web" })).toHaveAttribute("href", `/applications/${f.appId}`);
-    expect(screen.getByText(/any · container · Dockerfile \(BuildKit\)/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
-    for (const c of ["Production", "Production deploy", "Preflight", "Preflight deploy"])
-      expect(screen.getByRole("columnheader", { name: c })).toBeInTheDocument();
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "Application",
+      "Production",
+      "Preflight",
+      "Last delivery",
+      "Provisioning",
+      "Created",
+    ]);
     expect(screen.getAllByText("not deployed")).toHaveLength(2);
+  });
+
+  it("shows an environment as its health, the app's link and how long ago it was deployed", async () => {
+    const at = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
+    const app = { ...f.applications.applications[0], production: { status: "HEALTHY", url: "https://manual-web.example.test/", deployedAt: at } };
+    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [app] } }));
+    const open = await screen.findByRole("link", { name: "Open app ↗" });
+    expect(open).toHaveAttribute("href", "https://manual-web.example.test/");
+    expect(open.closest("td")).toHaveTextContent(/^Healthy — Open app ↗ — 3h$/);
+    expect(screen.getAllByText("not deployed")).toHaveLength(1);
   });
 
   it("shows an empty list", async () => {
@@ -226,13 +241,15 @@ describe("Build", () => {
     expect(within(delivery).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
     const pr = screen.getByRole("table", { name: "PipelineRun" });
     expect(pr).toHaveTextContent("manual-web-ci/build-build-ok");
-    expect(pr).toHaveTextContent("imageDigest");
+    expect(within(pr).getByRole("rowheader", { name: "Image Digest" })).toBeInTheDocument();
     const tasks = await screen.findByRole("region", { name: "TaskRuns" });
     await waitFor(() => expect(tasks).toHaveTextContent("build-image"));
     const tr = within(tasks).getByRole("table", { name: "TaskRun build-image facts" });
     expect(tr).toHaveTextContent("build-build-ok-build-image");
     expect(tasks).not.toHaveTextContent("Results:");
     for (const step of ["checkout", "build", "push"]) expect(within(tasks).getByText(step)).toBeInTheDocument();
+    const steps = within(tasks).getAllByRole("row").slice(-3).map((r) => r.textContent?.slice(0, 2));
+    expect(steps).toEqual(["3p", "2b", "1c"]);
     await userEvent.click(within(tasks).getAllByRole("button", { name: "View log" })[1]);
     const log = await screen.findByRole("log", { name: "Log of build" });
     expect(log).toHaveTextContent("exporting to oci image format");

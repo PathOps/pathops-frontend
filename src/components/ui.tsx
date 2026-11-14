@@ -8,7 +8,9 @@ const statusClass: Record<string, string> = {
   READY_FOR_BUILD: "ok",
   BUILD_AND_PUSH_CONFIGURED: "ok",
   True: "ok",
+  HEALTHY: "ok",
   FAILED: "error",
+  DEGRADED: "error",
   BLOCKED: "error",
   BLOCKED_CONFLICT: "error",
   False: "error",
@@ -16,6 +18,7 @@ const statusClass: Record<string, string> = {
   PROVISIONING: "running",
   Unknown: "running",
   running: "running",
+  PROGRESSING: "running",
   PENDING: "warning",
   WAITING_FOR_AUTHORIZATION: "warning",
   AUTHORIZATION_REQUIRED: "warning",
@@ -45,6 +48,13 @@ export function humanize(s: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+// title turns a camelCase name (a Tekton result) into words: "imageDigest"
+// is "Image Digest".
+export function title(name: string): string {
+  const words = name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function Head12({ revision, head12 }: { revision: string; head12?: string }) {
   return <code title={revision}>{head12 ?? revision.slice(0, 12)}</code>;
 }
@@ -61,6 +71,18 @@ export function Time({ at }: { at: string | null | undefined }) {
   return (
     <time dateTime={at} title={d.toISOString()}>
       {d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+    </time>
+  );
+}
+
+// Ago is how long ago, abbreviated (3s, 5m, 1h, 3d); the full time on hover.
+export function Ago({ at, now = Date.now() }: { at: string | null | undefined; now?: number }) {
+  if (!at) return <span className="muted">—</span>;
+  const s = Math.max(0, Math.floor((now - Date.parse(at)) / 1000));
+  const text = s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
+  return (
+    <time dateTime={at} title={new Date(at).toISOString()}>
+      {text}
     </time>
   );
 }

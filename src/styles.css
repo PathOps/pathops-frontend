@@ -185,6 +185,13 @@ small,
 .log-row > td {
   padding: 0;
 }
+.log-row p {
+  margin: 9px;
+}
+.centered {
+  text-align: center;
+  margin-top: 30vh;
+}
 ul.tree,
 ul.tree ul {
   list-style: none;
