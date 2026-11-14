@@ -16,8 +16,9 @@ function SigningInNotice() {
     return () => clearInterval(t);
   }, []);
   return (
-    <main>
-      <p className="muted centered" role="status" aria-label="Signing in">
+    <main className="centered">
+      <h1>PathOps</h1>
+      <p className="muted" role="status" aria-label="Signing in">
         Signing in<span className="dots">{".".repeat(dots)}</span>
       </p>
     </main>

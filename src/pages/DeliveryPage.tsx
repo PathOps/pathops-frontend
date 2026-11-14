@@ -9,6 +9,7 @@ import {
   Duration,
   Fact,
   Facts,
+  Head12,
   Loaded,
   RefreshButton,
   Status,
@@ -17,33 +18,55 @@ import {
   humanize,
   newestFirst,
 } from "../components/ui";
-import { AppCrumbs, PipelineRunFacts, TaskRunList } from "./BuildPage";
+import { AppCrumbs, PipelineRunRow, TaskRunList } from "./BuildPage";
 
-// BuildTree is a step's build as a tree: the Build, its PipelineRun and its
-// TaskRuns, each step with its log.
+// BuildTree is a step's build as a tree of one-row summaries, each level
+// indented: the Build, its PipelineRun, its TaskRuns, their steps (each
+// with its log).
 function BuildTree({ appId, buildId }: { appId: string; buildId: string }) {
   const b = useResource<BuildDetail>(`/api/v1/builds/${encodeURIComponent(buildId)}`, { pollWhile: (d) => running(d.status) });
   return (
     <Loaded resource={b}>
       {(d) => (
-        <ul className="tree" aria-label="Build tree">
-          <li>
-            Build <BuildLink appId={appId} id={d.id} number={d.number} /> — <Status status={d.status} />
-            {d.sanitizedError && <p className="error">{d.sanitizedError}</p>}
-            <ul>
-              <li>
-                PipelineRun
-                <PipelineRunFacts build={d} />
-                <ul>
-                  <li>
-                    TaskRuns
-                    <TaskRunList buildId={d.id} buildRunning={running(d.status)} />
-                  </li>
-                </ul>
-              </li>
-            </ul>
-          </li>
-        </ul>
+        <div className="level" role="group" aria-label="Build tree">
+          <table aria-label="Build summary">
+            <thead>
+              <tr>
+                <th>Build</th>
+                <th>Commit</th>
+                <th>Status</th>
+                <th>Started</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <BuildLink appId={appId} id={d.id} number={d.number} />
+                </td>
+                <td>
+                  <Head12 revision={d.sourceRevision} head12={d.head12} />
+                </td>
+                <td>
+                  <Status status={d.status} />
+                </td>
+                <td>
+                  <Time at={d.startedAt ?? d.createdAt} />
+                </td>
+                <td>
+                  <Duration seconds={d.durationSeconds} />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          {d.sanitizedError && <p className="error">{d.sanitizedError}</p>}
+          <div className="level">
+            <PipelineRunRow build={d} />
+            <div className="level">
+              <TaskRunList buildId={d.id} buildRunning={running(d.status)} rows />
+            </div>
+          </div>
+        </div>
       )}
     </Loaded>
   );
@@ -106,12 +129,15 @@ function Steps({ appId, steps }: { appId: string; steps: DeliveryStep[] }) {
                   <tr>
                     <td />
                     <td colSpan={6} className="detail">
-                      {s.externalRef && (
+                      {s.build ? (
+                        <BuildTree appId={appId} buildId={s.build.id} />
+                      ) : s.externalRef ? (
                         <p>
                           Execution <code>{s.externalRef}</code>
                         </p>
+                      ) : (
+                        <span className="muted">No details.</span>
                       )}
-                      {s.build ? <BuildTree appId={appId} buildId={s.build.id} /> : !s.externalRef && <span className="muted">No details.</span>}
                     </td>
                   </tr>
                 )}

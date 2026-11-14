@@ -207,14 +207,13 @@ small,
   width: 1.2em;
   text-align: left;
 }
-ul.tree,
-ul.tree ul {
-  list-style: none;
-  padding-left: 18px;
-  border-left: 1px solid var(--border);
+/* A level of a tree of summaries (a delivery step's build): each level one
+   indent further in. */
+.level {
+  margin-left: 24px;
 }
-ul.tree {
-  padding-left: 12px;
+.level table {
+  margin: 8px 0;
 }
 @media (max-width: 650px) {
   body {

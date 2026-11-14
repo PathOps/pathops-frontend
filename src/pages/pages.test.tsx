@@ -181,7 +181,7 @@ describe("Delivery run", () => {
     const steps = screen.getByRole("table", { name: "Delivery steps" });
     expect(steps).toHaveTextContent("Build application");
     expect(within(steps).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
-    expect(within(steps).queryByRole("list", { name: "Build tree" })).toBeNull();
+    expect(within(steps).queryByRole("group", { name: "Build tree" })).toBeNull();
     expect(screen.getByRole("table", { name: "Image" })).toHaveTextContent(f.digest);
   });
 
@@ -195,12 +195,21 @@ describe("Delivery run", () => {
 
   it("opens a failed step as its build tree, with one step's log open at a time under its step", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
-    const tree = await screen.findByRole("list", { name: "Build tree" });
+    const tree = await screen.findByRole("group", { name: "Build tree" });
     expect(tree).toHaveTextContent("manual-web-ci/build-b");
     expect(tree).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
-    expect(within(tree).getByRole("link", { name: "#2" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-bad`);
+    expect(within(within(tree).getByRole("table", { name: "Build summary" })).getByRole("link", { name: "#2" })).toHaveAttribute(
+      "href",
+      `/applications/${f.appId}/builds/build-bad`,
+    );
+    // One summary row per level, each level one indent further in.
+    const pr = within(tree).getByRole("table", { name: "PipelineRun" });
+    expect(pr.querySelectorAll(":scope > tbody > tr")).toHaveLength(1);
+    expect(pr.parentElement).toHaveClass("level");
+    expect(pr.parentElement!.parentElement).toBe(tree);
     const lint = await within(tree).findByRole("group", { name: "TaskRun lint" });
     const image = within(tree).getByRole("group", { name: "TaskRun build-image" });
+    expect(within(image).getByRole("table", { name: "TaskRun build-image summary" })).toHaveTextContent("build-image");
     // Steps latest first: build, then checkout.
     await userEvent.click(within(image).getAllByRole("button", { name: "View log" })[0]);
     const log = await within(image).findByRole("log", { name: "Log of build" });

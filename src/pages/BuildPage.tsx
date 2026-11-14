@@ -134,9 +134,54 @@ export function PipelineRunFacts({ build }: { build: BuildDetail }) {
   );
 }
 
+// PipelineRunRow is a build's PipelineRun as one summary row, or why Tekton
+// cannot tell.
+export function PipelineRunRow({ build }: { build: BuildDetail }) {
+  const pr = build.pipelineRunStatus;
+  return (
+    <table aria-label="PipelineRun">
+      <thead>
+        <tr>
+          <th>PipelineRun</th>
+          <th>Status</th>
+          <th>Started</th>
+          <th>Duration</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <code>{build.pipelineRun.name}</code>
+          </td>
+          {pr ? (
+            <>
+              <td>
+                <Status status={pr.status} label={pr.reason || pr.status} />
+              </td>
+              <td>
+                <Time at={pr.startTime} />
+              </td>
+              <td>
+                <Duration seconds={seconds(pr.startTime, pr.completionTime)} />
+              </td>
+              <td>{pr.message ?? "—"}</td>
+            </>
+          ) : (
+            <td colSpan={4} className="muted">
+              {observationText[build.observation] ?? build.observation}
+            </td>
+          )}
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
 // TaskRunList is a build's TaskRuns with their steps, latest first. One
-// step's log is open at a time, in the row under that step.
-export function TaskRunList({ buildId, buildRunning }: { buildId: string; buildRunning: boolean }) {
+// step's log is open at a time, in the row under that step. As rows, each
+// TaskRun is one summary row with its steps a level in.
+export function TaskRunList({ buildId, buildRunning, rows = false }: { buildId: string; buildRunning: boolean; rows?: boolean }) {
   const t = useResource<Tasks>(`/api/v1/builds/${encodeURIComponent(buildId)}/tasks`, { pollWhile: () => buildRunning });
   const [open, setOpen] = useState<string | null>(null);
   return (
@@ -149,7 +194,7 @@ export function TaskRunList({ buildId, buildRunning }: { buildId: string; buildR
         ) : (
           <>
             {newestFirst(d.taskRuns).map((tr) => (
-              <TaskRun key={tr.name} buildId={buildId} tr={tr} open={open} onLog={(key) => setOpen(open === key ? null : key)} />
+              <TaskRun key={tr.name} buildId={buildId} tr={tr} rows={rows} open={open} onLog={(key) => setOpen(open === key ? null : key)} />
             ))}
           </>
         )
@@ -158,7 +203,59 @@ export function TaskRunList({ buildId, buildRunning }: { buildId: string; buildR
   );
 }
 
-function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunView; open: string | null; onLog: (key: string) => void }) {
+function TaskRunRow({ tr }: { tr: TaskRunView }) {
+  return (
+    <table aria-label={`TaskRun ${tr.pipelineTask} summary`}>
+      <thead>
+        <tr>
+          <th>TaskRun</th>
+          <th>Status</th>
+          <th>Started</th>
+          <th>Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <code title={tr.name}>{tr.pipelineTask}</code>
+          </td>
+          <td>
+            <Status status={tr.status} label={tr.reason || tr.status || tr.observation} />
+          </td>
+          <td>
+            <Time at={tr.startTime} />
+          </td>
+          <td>
+            <Duration seconds={seconds(tr.startTime, tr.completionTime)} />
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+function TaskRun({
+  buildId,
+  tr,
+  rows,
+  open,
+  onLog,
+}: {
+  buildId: string;
+  tr: TaskRunView;
+  rows: boolean;
+  open: string | null;
+  onLog: (key: string) => void;
+}) {
+  if (rows)
+    return (
+      <div aria-label={`TaskRun ${tr.pipelineTask}`} role="group">
+        <TaskRunRow tr={tr} />
+        <div className="level">
+          <StepTable buildId={buildId} tr={tr} open={open} onLog={onLog} />
+        </div>
+      </div>
+    );
   return (
     <div aria-label={`TaskRun ${tr.pipelineTask}`} role="group">
       <h3>
@@ -177,7 +274,14 @@ function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunVie
         </Fact>
         {tr.message && <Fact label="Message">{tr.message}</Fact>}
       </Facts>
-      <div className="scroll">
+      <StepTable buildId={buildId} tr={tr} open={open} onLog={onLog} />
+    </div>
+  );
+}
+
+function StepTable({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunView; open: string | null; onLog: (key: string) => void }) {
+  return (
+    <div className="scroll">
         <table>
           <thead>
             <tr>
@@ -222,7 +326,6 @@ function TaskRun({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunVie
             })}
           </tbody>
         </table>
-      </div>
     </div>
   );
 }
