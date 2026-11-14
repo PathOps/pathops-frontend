@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ApiError } from "../api/client";
 import type { Resource } from "../api/useResource";
@@ -115,22 +115,32 @@ export function Copy({ text, children }: { text: string; children?: ReactNode })
 }
 
 // CopyButton copies text it does not show; label names it for a screen
-// reader when the text itself is too long to (a log).
+// reader when the text itself is too long to (a log). "Copied" shows for a
+// moment in a small bubble over the button, beside nothing.
 export function CopyButton({ text, label }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(0);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(0), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
   return (
-    <>
+    <span className="copy">
       <button
         type="button"
         aria-label={`Copy ${label ?? text}`}
         onClick={() => {
-          void navigator.clipboard?.writeText(text).then(() => setCopied(true));
+          void navigator.clipboard?.writeText(text).then(() => setCopied(Date.now()));
         }}
       >
         ⧉ Copy
       </button>
-      {copied && <small role="status"> Copied</small>}
-    </>
+      {copied > 0 && (
+        <span className="copied" role="status">
+          Copied
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -188,6 +188,25 @@ small,
 .scroll {
   overflow-x: auto;
 }
+/* "Copied": a small bubble over its Copy button, for a moment. */
+.copy {
+  position: relative;
+  display: inline-block;
+}
+.copied {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 0.8em;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
 .toolbar {
   display: flex;
   flex-wrap: wrap;

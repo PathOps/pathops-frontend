@@ -276,6 +276,9 @@ describe("Build", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     await userEvent.click(within(log).getByRole("button", { name: "Copy log of build" }));
     expect(writeText).toHaveBeenCalledWith(f.buildLog.content);
+    // "Copied" shows in a bubble over the button for a moment, then goes.
+    expect(await within(log).findByRole("status")).toHaveTextContent(/^Copied$/);
+    await waitFor(() => expect(within(log).queryByRole("status")).toBeNull(), { timeout: 3000 });
     const created: Blob[] = [];
     URL.createObjectURL = vi.fn((b: Blob) => (created.push(b), "blob:log"));
     URL.revokeObjectURL = vi.fn();
