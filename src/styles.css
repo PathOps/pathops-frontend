@@ -15,9 +15,6 @@
   --ok: #16803c;
   --error: #c62828;
   --warning: #946200;
-  --action: #555;
-  --log-bg: #000;
-  --log-fg: #fff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -34,9 +31,6 @@
     --ok: #67d391;
     --error: #ff8585;
     --warning: #f4c16c;
-    --action: #e9e9e9;
-    --log-bg: #fff;
-    --log-fg: #000;
   }
 }
 :root[data-theme="dark"] {
@@ -53,9 +47,6 @@
   --ok: #67d391;
   --error: #ff8585;
   --warning: #f4c16c;
-  --action: #e9e9e9;
-  --log-bg: #fff;
-  --log-fg: #000;
 }
 
 html,
@@ -233,10 +224,10 @@ small,
 .log-box {
   position: relative;
 }
-/* A log contrasts with the page: black in the light theme, white in the dark. */
+/* A log looks the same in either theme: white on black. */
 .log-box pre {
-  background: var(--log-bg);
-  color: var(--log-fg);
+  background: #000;
+  color: #fff;
 }
 /* Clear of the log's scrollbar. */
 .log-actions {
@@ -246,12 +237,11 @@ small,
   display: flex;
   gap: 4px;
 }
-/* Inverted (dark on a light log, light on a dark one): the buttons stand
-   out over the log's text. */
+/* Grey over the black log, in either theme. */
 .log-actions button {
-  background: var(--action);
-  border-color: var(--action);
-  color: var(--bg);
+  background: #555;
+  border-color: #555;
+  color: #fff;
 }
 .log-actions button:hover {
   opacity: 0.85;
