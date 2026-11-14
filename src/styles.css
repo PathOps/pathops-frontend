@@ -243,7 +243,35 @@ small,
   text-align: left;
 }
 /* A level of a delivery step's build: the Build, its PipelineRun, its
-   TaskRuns, their steps, one table under the other. */
+   TaskRuns, their steps. Each level is a short indent in, hung from its
+   parent by a discreet dashed guide: a vertical line, and an elbow to each
+   child (its first table, or each TaskRun). */
+.level .level {
+  position: relative;
+  margin-left: 10px;
+  padding-left: 14px;
+  border-left: 1px dashed var(--border);
+}
+.level .level::before,
+.level .level > [role="group"]::before {
+  content: "";
+  position: absolute;
+  top: 28px;
+  width: 12px;
+  border-top: 1px dashed var(--border);
+}
+.level .level::before {
+  left: 0;
+}
+.level .level:has(> [role="group"])::before {
+  display: none;
+}
+.level .level > [role="group"] {
+  position: relative;
+}
+.level .level > [role="group"]::before {
+  left: -14px;
+}
 .level table {
   margin: 8px 0;
 }
