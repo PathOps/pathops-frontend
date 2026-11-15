@@ -309,26 +309,48 @@ describe("Build", () => {
   });
 });
 
-describe("Theme", () => {
-  it("toggles light and dark and remembers the choice", async () => {
-    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] } }));
+describe("Header", () => {
+  const me = { subject: "s", email: "alice@example.test", issuer: "https://dex", cellId: "canary" };
+
+  it("holds the breadcrumb, the Applications and the Inbox, and the user's menu button; no Cell", async () => {
+    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/me": me }));
+    const header = screen.getByRole("banner");
+    const user = await within(header).findByRole("button", { name: /alice@example\.test/ });
+    expect(user).toHaveAttribute("aria-haspopup", "menu");
+    expect(user).toHaveAttribute("aria-expanded", "false");
+    expect(header.textContent).toMatch(/^PathOps \/ Applications\s*Applications\s*Inbox\s*alice@example\.test ▾$/);
+    expect(header).not.toHaveTextContent("canary");
+    expect(within(header).queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getByRole("contentinfo")).toHaveTextContent("© 2026 PathOps · Open source under the MIT License");
+  });
+
+  it("opens the user's menu: the theme switch, which it remembers, and sign out; Escape and a click outside close it", async () => {
+    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/me": me }));
+    const user = await screen.findByRole("button", { name: /alice@example\.test/ });
+    await userEvent.click(user);
+    const menu = screen.getByRole("menu", { name: "User" });
+    expect(user).toHaveAttribute("aria-expanded", "true");
+    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual([expect.stringMatching(/^(Dark|Light) mode$/), "Sign out"]);
     const before = document.documentElement.dataset.theme;
-    const toggle = screen.getByRole("button", { name: /mode$/ });
-    await userEvent.click(toggle);
+    await userEvent.click(within(menu).getByRole("menuitem", { name: /mode$/ }));
     const after = document.documentElement.dataset.theme;
     expect(after).not.toEqual(before);
     expect(localStorage.getItem("pathops-theme")).toEqual(after);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await userEvent.click(user);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await userEvent.click(user);
+    await userEvent.click(screen.getByRole("heading", { level: 1, name: "Applications" }));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("sits in the header, before the user and sign out, with no Cell", async () => {
-    const me = { subject: "s", email: "alice@example.test", issuer: "https://dex", cellId: "canary" };
+  it("signs out from the user's menu", async () => {
     renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/me": me }));
-    const header = screen.getByRole("banner");
-    await within(header).findByText("alice@example.test");
-    expect(header.textContent).toMatch(/^PathOps \/ Applications\s*(Dark|Light) mode\s*alice@example\.test\s*Sign out$/);
-    expect(header).not.toHaveTextContent("canary");
-    expect(screen.getByRole("contentinfo")).toHaveTextContent("© 2026 PathOps · Open source under the MIT License");
-    expect(within(header).queryByRole("button", { name: "alice@example.test" })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: /alice@example\.test/ }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+    // The page leaves for /signed-out (outside these routes).
+    expect(await screen.findByText("No such page.")).toBeInTheDocument();
   });
 });
 
@@ -511,13 +533,13 @@ describe("Inbox", () => {
   });
 });
 
-describe("Sidebar", () => {
+describe("Main navigation", () => {
   const me = { "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true&limit=1": { messages: [], unread: 3, nextCursor: "x", previousCursor: null } };
 
   it("links the Inbox, with the whole Inbox's unread count, and the Applications; / opens the Applications", async () => {
     renderAt("/", fakeApi(me));
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/inbox", "/applications"]);
+    expect(within(nav).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/applications", "/inbox"]);
     expect(await within(nav).findByRole("link", { name: "Inbox, 3 unread" })).toHaveTextContent(/Inbox\s*3$/);
     const apps = within(nav).getByRole("link", { name: /Applications/ });
     expect(apps).toHaveClass("active");
@@ -643,9 +665,9 @@ describe("Breadcrumb", () => {
     expect(crumbs().textContent).toBe("PathOps / Applications");
   });
 
-  it("the sidebar's links are words, no icons", () => {
+  it("the main navigation's links are words, no icons", () => {
     renderAt("/applications", fakeApi({ "/api/v1/applications": { applications: [] } }));
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Inbox", "Applications"]);
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Applications", "Inbox"]);
   });
 });

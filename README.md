@@ -37,19 +37,18 @@ reload signs in again through Dex's login session (shared with the CLI and
 Forgejo), without a password. Only the PKCE verifier, state and return path
 cross the redirect, in `sessionStorage`.
 
-## Screens (v0.5)
+## Screens (v0.6)
 
 Plain, document-like pages: bordered tables, bold colored statuses, a light
 and a dark theme (the system's, or the user's choice). Everything temporal is
 latest first; DeliveryRuns and Builds are named by their number within the
 Application (`#N`, from the Tenant Control Plane).
 
-A sidebar along the window's left edge, full height, is the main
-navigation: **Inbox** (with the whole Inbox's unread count) and
-**Applications** (`/applications`; `/` opens it), the current one marked;
-the page sits beside it, on the same background. On a phone it is a bar of
-links above the content. The breadcrumb starts at the section: PathOps /
-Applications / ..., or PathOps / Inbox / #N. The header keeps the breadcrumb, the theme, the user and sign out.
+The header holds the breadcrumb (PathOps / Applications / ..., or PathOps /
+Inbox / #N), the main navigation (**Applications** at `/applications`, `/`
+opens it; **Inbox** with the whole Inbox's unread count), the current one
+marked, and the signed-in user as a button whose menu switches the theme and
+signs out.
 
 Long lists are paged by the Tenant Control Plane (keyset cursors), never cut
 in the browser: the Inbox 25 a page (**Newer** / **Older**), Delivery Runs
@@ -84,7 +83,7 @@ of the list shows its control disabled, a list of one page none.
   256 KiB, as the Tenant Control Plane bounds it; not streamed) opens in the
   row under the step, one at a time.
 
-- **Inbox** (Decision 0061): the sidebar shows `✉ Inbox` with the unread
+- **Inbox** (Decision 0061): the header shows **Inbox** with the unread
   count. `/inbox` lists messages like a mail inbox, newest first: number,
   subject (with its Application) and when it arrived; unread ones in bold
   with a dot. Nothing technical (ids, types, deliveries, logs) is listed. A
