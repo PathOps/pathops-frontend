@@ -281,3 +281,25 @@ export interface Me {
   issuer: string;
   cellId: string;
 }
+
+// The Inbox (Decision 0061): what needs the owner's attention, newest first.
+export interface Inbox {
+  items: InboxItem[];
+  unread: number;
+}
+
+export interface InboxItem {
+  id: string;
+  applicationId: string;
+  applicationName: string;
+  type: string;
+  title: string;
+  message: string;
+  read: boolean;
+  readAt: Iso | null;
+  createdAt: Iso;
+  delivery: { id: string; number: number; sourceRevision: string; head12: string; status: string } | null;
+  // downloadUrl is the Cell Artifact Store's own page: the browser signs in
+  // there (Dex) and downloads directly; the Tenant CP never serves the bytes.
+  artifact: { id: string; type: string; mediaType: string; size: number; sha256: string; downloadUrl: string } | null;
+}

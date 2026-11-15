@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
-import type { Me } from "../api/types";
+import type { Inbox, Me } from "../api/types";
 import { useResource } from "../api/useResource";
 import { signOut } from "../auth/oidc";
 
@@ -47,9 +47,36 @@ function ThemeToggle() {
   );
 }
 
+// InboxChanged is dispatched on window when the Inbox changed here (an item
+// read): the header's count reads it again.
+export const InboxChanged = "pathops-inbox-changed";
+
+// InboxLink is the header's way to the Inbox, with the unread count. It is
+// read with the page (no push channel): Refresh or another page shows a new
+// failure.
+function InboxLink() {
+  const inbox = useResource<Inbox>("/api/v1/inbox?unread=true");
+  const { reload } = inbox;
+  useEffect(() => {
+    window.addEventListener(InboxChanged, reload);
+    return () => window.removeEventListener(InboxChanged, reload);
+  }, [reload]);
+  const unread = inbox.data?.unread ?? 0;
+  return (
+    <Link to="/inbox" className="inbox-link" aria-label={unread > 0 ? `Inbox, ${unread} unread` : "Inbox"}>
+      <span aria-hidden="true">✉</span> Inbox
+      {unread > 0 && (
+        <span className="badge" aria-hidden="true">
+          {unread}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 // Page is a page of the signed-in UI: the breadcrumb (PathOps / Applications
-// / ... / here), the theme, the user and sign out, then the content and the
-// footer.
+// / ... / here), the Inbox, the theme, the user and sign out, then the
+// content and the footer.
 export function Page({ crumbs, children }: { crumbs?: ReactNode; children: ReactNode }) {
   const me = useResource<Me>("/api/v1/me");
   const [out, setOut] = useState(false);
@@ -61,6 +88,7 @@ export function Page({ crumbs, children }: { crumbs?: ReactNode; children: React
           {crumbs}
         </nav>
         <span className="spacer" />
+        <InboxLink />
         <ThemeToggle />
         {me.data && <span className="user">{me.data.email ?? me.data.name ?? me.data.subject}</span>}
         <button

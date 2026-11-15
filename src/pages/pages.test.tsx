@@ -320,12 +320,12 @@ describe("Theme", () => {
     expect(localStorage.getItem("pathops-theme")).toEqual(after);
   });
 
-  it("sits first in the header, before the user and sign out, with no Cell", async () => {
+  it("sits after the Inbox in the header, before the user and sign out, with no Cell", async () => {
     const me = { subject: "s", email: "alice@example.test", issuer: "https://dex", cellId: "canary" };
     renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/me": me }));
     const header = screen.getByRole("banner");
     await within(header).findByText("alice@example.test");
-    expect(header.textContent).toMatch(/mode\s*alice@example\.test\s*Sign out$/);
+    expect(header.textContent).toMatch(/Inbox\s*(Dark|Light) mode\s*alice@example\.test\s*Sign out$/);
     expect(header).not.toHaveTextContent("canary");
     expect(screen.getByRole("contentinfo")).toHaveTextContent("© 2026 PathOps · Open source under the MIT License");
     expect(within(header).queryByRole("button", { name: "alice@example.test" })).not.toBeInTheDocument();
@@ -341,5 +341,92 @@ describe("Duration", () => {
     );
     expect(screen.getByTitle("The reported end precedes the start")).toHaveTextContent("0s");
     expect(document.body).toHaveTextContent("0s|6s");
+  });
+});
+
+const inboxItem = (over: Record<string, unknown> = {}) => ({
+  id: "item-1",
+  applicationId: f.appId,
+  applicationName: "manual-web",
+  type: "BUILD_FAILED",
+  title: "Build failed",
+  message: "BUILD_APPLICATION failed for revision cccccccccccc",
+  read: false,
+  readAt: null,
+  createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+  delivery: { id: "run-bad", number: 2, sourceRevision: "c".repeat(40), head12: "cccccccccccc", status: "FAILED" },
+  artifact: {
+    id: "art-1",
+    type: "BUILD_FAILURE_LOGS",
+    mediaType: "application/gzip",
+    size: 1234,
+    sha256: "ab".repeat(32),
+    downloadUrl: `https://artifacts-canary.demo.pathops.io/objects/applications/${f.appId}/deliveries/run-bad/build-failure.tar.gz`,
+  },
+  ...over,
+});
+
+describe("Inbox", () => {
+  it("shows the unread count in the header and links to the Inbox", async () => {
+    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true": { items: [inboxItem()], unread: 1 } }));
+    const link = await screen.findByRole("link", { name: "Inbox, 1 unread" });
+    expect(link).toHaveAttribute("href", "/inbox");
+    expect(link).toHaveTextContent(/Inbox\s*1$/);
+  });
+
+  it("shows no badge without unread items", async () => {
+    const api = fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true": { items: [], unread: 0 } });
+    renderAt("/", api);
+    await waitFor(() => expect(api.calls).toContain("/api/v1/inbox?unread=true"));
+    expect(screen.getByRole("link", { name: "Inbox" })).toHaveTextContent(/^✉ Inbox$/);
+  });
+
+  it("lists the items, unread in bold, with the delivery and a direct download from the Artifact Store", async () => {
+    const read = inboxItem({ id: "item-0", title: "Older failure", read: true, readAt: "2026-11-15T10:00:00Z" });
+    renderAt("/inbox", fakeApi({ "/api/v1/inbox": { items: [inboxItem(), read], unread: 1 } }));
+    const table = await screen.findByRole("table", { name: "Inbox" });
+    const rows = within(table).getAllByRole("row");
+    expect(rows.map((r) => r.className)).toEqual(["", "unread", "read"]);
+    expect(within(rows[1]).getByText("Build failed")).toHaveClass("item-title");
+    expect(rows[1]).toHaveTextContent("BUILD_APPLICATION failed for revision cccccccccccc");
+    expect(rows[1]).toHaveTextContent("manual-web");
+    expect(rows[1]).toHaveTextContent("#2 cccccccccccc");
+    expect(within(rows[1]).getByRole("link", { name: "View delivery" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-bad`);
+    const dl = within(rows[1]).getByRole("link", { name: "Download logs ↗" });
+    expect(dl).toHaveAttribute("href", `https://artifacts-canary.demo.pathops.io/objects/applications/${f.appId}/deliveries/run-bad/build-failure.tar.gz`);
+    expect(dl).toHaveAttribute("target", "_blank");
+    expect(dl).toHaveAttribute("rel", "noopener noreferrer");
+    expect(within(rows[1]).getByRole("button", { name: "Mark read" })).toBeInTheDocument();
+    expect(within(rows[2]).queryByRole("button", { name: "Mark read" })).not.toBeInTheDocument();
+    expect(screen.getByText("1 unread.")).toBeInTheDocument();
+  });
+
+  it("marks an item read on click and reads the Inbox again", async () => {
+    const api = fakeApi({
+      "/api/v1/inbox": { items: [inboxItem()], unread: 1 },
+      "/api/v1/inbox?unread=true": { items: [inboxItem()], unread: 1 },
+      "POST /api/v1/inbox/item-1/read": inboxItem({ read: true, readAt: "2026-11-15T10:10:00Z" }),
+    });
+    renderAt("/inbox", api);
+    await userEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+    await waitFor(() => expect(api.calls).toContain("POST /api/v1/inbox/item-1/read"));
+    await waitFor(() => expect(api.calls.filter((c) => c === "/api/v1/inbox").length).toBe(2));
+    await waitFor(() => expect(api.calls.filter((c) => c === "/api/v1/inbox?unread=true").length).toBe(2));
+  });
+
+  it("marks an item read when its delivery is opened", async () => {
+    const api = fakeApi({
+      ...all,
+      "/api/v1/inbox": { items: [inboxItem()], unread: 1 },
+      "POST /api/v1/inbox/item-1/read": inboxItem({ read: true }),
+    });
+    renderAt("/inbox", api);
+    await userEvent.click(await screen.findByRole("link", { name: "View delivery" }));
+    await waitFor(() => expect(api.calls).toContain("POST /api/v1/inbox/item-1/read"));
+  });
+
+  it("shows an empty Inbox", async () => {
+    renderAt("/inbox", fakeApi({ "/api/v1/inbox": { items: [], unread: 0 } }));
+    expect(await screen.findByText("Nothing here yet.")).toBeInTheDocument();
   });
 });

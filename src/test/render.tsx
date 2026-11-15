@@ -17,6 +17,13 @@ export function fakeApi(table: Record<string, unknown>): Api & { calls: string[]
       if (v instanceof Promise) return v as Promise<T>;
       return Promise.resolve(structuredClone(v) as T);
     },
+    post<T>(path: string): Promise<T> {
+      calls.push(`POST ${path}`);
+      const v = table[`POST ${path}`];
+      if (v === undefined) return Promise.reject(new ApiError(404, "not_found"));
+      if (v instanceof Error) return Promise.reject(v);
+      return Promise.resolve(structuredClone(v) as T);
+    },
   };
 }
 

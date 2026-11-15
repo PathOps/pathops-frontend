@@ -17,6 +17,9 @@ export class SigningIn extends Error {}
 
 export interface Api {
   get<T>(path: string): Promise<T>;
+  // post sends a bodiless POST: the UI's only change, marking an Inbox item
+  // read (Decision 0061).
+  post<T>(path: string): Promise<T>;
 }
 
 // signIn sends the browser to the Cell's Dex, to come back to the current page.
@@ -29,21 +32,29 @@ export async function signIn(): Promise<never> {
 // httpApi calls the Tenant CP at this origin with the signed-in user's token.
 // A missing or refused token signs in again.
 export const httpApi: Api = {
-  async get<T>(path: string): Promise<T> {
-    const token = await accessToken();
-    if (!token) return signIn();
-    const r = await fetch(path, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
-    if (r.status === 401) {
-      signOut();
-      return signIn();
-    }
-    if (!r.ok) {
-      const body = await r.json().catch(() => ({}));
-      throw new ApiError(r.status, typeof body.error === "string" ? body.error : "error");
-    }
-    return (await r.json()) as T;
+  get<T>(path: string): Promise<T> {
+    return call<T>("GET", path);
+  },
+  post<T>(path: string): Promise<T> {
+    return call<T>("POST", path);
   },
 };
+
+// call sends one request with the signed-in user's token.
+async function call<T>(method: string, path: string): Promise<T> {
+  const token = await accessToken();
+  if (!token) return signIn();
+  const r = await fetch(path, { method, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+  if (r.status === 401) {
+    signOut();
+    return signIn();
+  }
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new ApiError(r.status, typeof body.error === "string" ? body.error : "error");
+  }
+  return (await r.json()) as T;
+}
 
 export const ApiContext = createContext<Api>(httpApi);
 

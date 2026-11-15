@@ -37,7 +37,7 @@ reload signs in again through Dex's login session (shared with the CLI and
 Forgejo), without a password. Only the PKCE verifier, state and return path
 cross the redirect, in `sessionStorage`.
 
-## Screens (v0.2)
+## Screens (v0.3)
 
 Plain, document-like pages: bordered tables, bold colored statuses, a light
 and a dark theme (the system's, or the user's choice). Everything temporal is
@@ -70,6 +70,17 @@ Application (`#N`, from the Tenant Control Plane).
   table) and their steps, numbered in execution order. Each step's log (the last 4000 lines, at most
   256 KiB, as the Tenant Control Plane bounds it; not streamed) opens in the
   row under the step, one at a time.
+
+- **Inbox** (Decision 0061): the header shows `✉ Inbox` with the unread
+  count. The page lists what needs the owner's attention, newest first
+  (v1: a build that failed), unread items in bold: the Application, the
+  delivery (`#N`, HEAD12), how long ago, **View delivery** and **Download
+  logs**. Download opens the Cell's Artifact Store at the Artifact's URL: the
+  store signs the browser in with the Cell's Dex (an existing session is
+  reused) and serves the file itself; the UI holds no Artifact Store
+  credential and the Tenant Control Plane never carries the bytes. Opening
+  the delivery, downloading or "Mark read" marks the item read
+  (`POST /api/v1/inbox/{id}/read`, the UI's only change).
 
 Repository links open through Forgejo's sign-in
 (`/user/login?redirect_to=<path>`), which goes to Dex and lands on the
