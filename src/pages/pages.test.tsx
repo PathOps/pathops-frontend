@@ -320,12 +320,12 @@ describe("Theme", () => {
     expect(localStorage.getItem("pathops-theme")).toEqual(after);
   });
 
-  it("sits after the Inbox in the header, before the user and sign out, with no Cell", async () => {
+  it("sits in the header, before the user and sign out, with no Cell", async () => {
     const me = { subject: "s", email: "alice@example.test", issuer: "https://dex", cellId: "canary" };
     renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/me": me }));
     const header = screen.getByRole("banner");
     await within(header).findByText("alice@example.test");
-    expect(header.textContent).toMatch(/Inbox\s*(Dark|Light) mode\s*alice@example\.test\s*Sign out$/);
+    expect(header.textContent).toMatch(/^PathOps \/ Applications\s*(Dark|Light) mode\s*alice@example\.test\s*Sign out$/);
     expect(header).not.toHaveTextContent("canary");
     expect(screen.getByRole("contentinfo")).toHaveTextContent("© 2026 PathOps · Open source under the MIT License");
     expect(within(header).queryByRole("button", { name: "alice@example.test" })).not.toBeInTheDocument();
@@ -380,16 +380,16 @@ const inboxMessage = (over: Record<string, unknown> = {}) => ({
 
 describe("Inbox", () => {
   it("shows the unread count in the header and links to the Inbox", async () => {
-    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true": { messages: [inboxMessage()], unread: 1 } }));
+    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true&limit=1": { messages: [inboxMessage()], unread: 1 } }));
     const link = await screen.findByRole("link", { name: "Inbox, 1 unread" });
     expect(link).toHaveAttribute("href", "/inbox");
     expect(link).toHaveTextContent(/Inbox\s*1$/);
   });
 
   it("shows no badge without unread messages", async () => {
-    const api = fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true": { messages: [], unread: 0 } });
+    const api = fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true&limit=1": { messages: [], unread: 0 } });
     renderAt("/", api);
-    await waitFor(() => expect(api.calls).toContain("/api/v1/inbox?unread=true"));
+    await waitFor(() => expect(api.calls).toContain("/api/v1/inbox?unread=true&limit=1"));
     expect(screen.getByRole("link", { name: "Inbox" })).toHaveTextContent(/^✉ Inbox$/);
   });
 
@@ -432,7 +432,7 @@ describe("Inbox", () => {
     const at = "2026-11-15T14:02:00Z";
     const api = fakeApi({
       "/api/v1/inbox/3": inboxMessage({ createdAt: at }),
-      "/api/v1/inbox?unread=true": { messages: [inboxMessage()], unread: 1 },
+      "/api/v1/inbox?unread=true&limit=1": { messages: [inboxMessage()], unread: 1 },
       "POST /api/v1/inbox/3/read": inboxMessage({ read: true, readAt: "2026-11-15T12:00:00Z" }),
     });
     renderAt("/inbox/3", api);
@@ -467,7 +467,7 @@ describe("Inbox", () => {
     }
     // Opening it read it, once, and the header's count was read again.
     await waitFor(() => expect(api.calls.filter((c) => c === "POST /api/v1/inbox/3/read")).toHaveLength(1));
-    await waitFor(() => expect(api.calls.filter((c) => c === "/api/v1/inbox?unread=true").length).toBe(2));
+    await waitFor(() => expect(api.calls.filter((c) => c === "/api/v1/inbox?unread=true&limit=1").length).toBe(2));
   });
 
   it("does not mark a read message again", async () => {
@@ -508,5 +508,122 @@ describe("Inbox", () => {
   it("shows an empty Inbox", async () => {
     renderAt("/inbox", fakeApi({ "/api/v1/inbox": { messages: [], unread: 0 } }));
     expect(await screen.findByText("Nothing here yet.")).toBeInTheDocument();
+  });
+});
+
+describe("Sidebar", () => {
+  const me = { "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true&limit=1": { messages: [], unread: 3, nextCursor: "x", previousCursor: null } };
+
+  it("links the Inbox, with the whole Inbox's unread count, and the Applications; / opens the Applications", async () => {
+    renderAt("/", fakeApi(me));
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/inbox", "/applications"]);
+    expect(await within(nav).findByRole("link", { name: "Inbox, 3 unread" })).toHaveTextContent(/Inbox\s*3$/);
+    const apps = within(nav).getByRole("link", { name: /Applications/ });
+    expect(apps).toHaveClass("active");
+    expect(apps).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "Inbox, 3 unread" })).not.toHaveClass("active");
+    expect(await screen.findByRole("heading", { level: 1, name: "Applications" })).toBeInTheDocument();
+  });
+
+  it("marks the Inbox on its pages, and the Applications on an Application's", async () => {
+    const { unmount } = renderAt("/inbox/3", fakeApi({ ...me, "/api/v1/inbox/3": inboxMessage({ read: true }) }));
+    let nav = screen.getByRole("navigation", { name: "Main" });
+    expect(await within(nav).findByRole("link", { name: "Inbox, 3 unread" })).toHaveClass("active");
+    expect(within(nav).getByRole("link", { name: /Applications/ })).not.toHaveClass("active");
+    unmount();
+    renderAt(`/applications/${f.appId}/deliveries`, fakeApi({ ...all, ...me }));
+    nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getByRole("link", { name: /Applications/ })).toHaveAttribute("aria-current", "page");
+  });
+});
+
+describe("Pagination", () => {
+  const messages = (from: number, to: number) => {
+    const out = [];
+    for (let n = from; n >= to; n--) out.push(inboxMessage({ id: `m-${n}`, number: n, subject: `Message ${n}`, read: n % 2 === 0 }));
+    return out;
+  };
+
+  it("pages the Inbox 25 at a time from the Tenant CP: Newer and Older, the unread count the whole Inbox's", async () => {
+    const api = fakeApi({
+      "/api/v1/inbox": { messages: messages(30, 6), unread: 15, nextCursor: "older-6", previousCursor: null },
+      "/api/v1/inbox?cursor=older-6": { messages: messages(5, 1), unread: 15, nextCursor: null, previousCursor: "newer-5" },
+    });
+    renderAt("/inbox", api);
+    const table = await screen.findByRole("table", { name: "Inbox" });
+    expect(within(table).getAllByRole("row")).toHaveLength(26);
+    expect(screen.getByText("15 unread")).toBeInTheDocument();
+    let pager = screen.getByRole("navigation", { name: "Inbox pages" });
+    expect(within(pager).getByText("← Newer")).toHaveAttribute("aria-disabled", "true");
+    const older = within(pager).getByRole("link", { name: "Older →" });
+    expect(older).toHaveAttribute("href", "/inbox?cursor=older-6");
+    await userEvent.click(older);
+    await waitFor(() => expect(api.calls).toContain("/api/v1/inbox?cursor=older-6"));
+    await waitFor(() => expect(within(screen.getByRole("table", { name: "Inbox" })).getAllByRole("row")).toHaveLength(6));
+    expect(screen.getByText("15 unread")).toBeInTheDocument();
+    pager = screen.getByRole("navigation", { name: "Inbox pages" });
+    expect(within(pager).getByRole("link", { name: "← Newer" })).toHaveAttribute("href", "/inbox?cursor=newer-5");
+    expect(within(pager).getByText("Older →")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("reads the page from the URL (a refresh or a copied link keeps it)", async () => {
+    const api = fakeApi({ "/api/v1/inbox?cursor=older-6": { messages: messages(5, 1), unread: 15, nextCursor: null, previousCursor: "newer-5" } });
+    renderAt("/inbox?cursor=older-6", api);
+    expect(await screen.findByRole("link", { name: "Message 5" })).toHaveAttribute("href", "/inbox/5");
+    expect(api.calls).not.toContain("/api/v1/inbox");
+  });
+
+  it("shows no pager for a single page", async () => {
+    renderAt("/inbox", fakeApi({ "/api/v1/inbox": { messages: messages(3, 1), unread: 1, nextCursor: null, previousCursor: null } }));
+    await screen.findByRole("table", { name: "Inbox" });
+    expect(screen.queryByRole("navigation", { name: "Inbox pages" })).not.toBeInTheDocument();
+  });
+
+  const runs = (from: number, to: number) => {
+    const out = [];
+    for (let n = from; n >= to; n--) out.push({ ...f.deliveries.deliveries[0], id: `run-${n}`, number: n });
+    return out;
+  };
+  const builds = (from: number, to: number) => {
+    const out = [];
+    for (let n = from; n >= to; n--)
+      out.push({ ...f.buildOk, id: `build-${n}`, number: n, deliveryRunId: `run-${n}`, deliveryNumber: n, status: "FAILED" });
+    return out;
+  };
+
+  it("pages Delivery Runs 10 at a time: Previous and Next", async () => {
+    const api = fakeApi({
+      ...all,
+      [`${app}/deliveries`]: { deliveries: runs(25, 16), nextCursor: "d-16", previousCursor: null },
+      [`${app}/deliveries?cursor=d-16`]: { deliveries: runs(15, 6), nextCursor: "d-6", previousCursor: "d-15" },
+    });
+    renderAt(`/applications/${f.appId}/deliveries`, api);
+    const pager = await screen.findByRole("navigation", { name: "Delivery pages" });
+    expect(screen.getByRole("region", { name: "Delivery" }).querySelectorAll("tbody tr")).toHaveLength(10);
+    expect(within(pager).getByText("← Previous")).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(within(pager).getByRole("link", { name: "Next →" }));
+    await waitFor(() => expect(api.calls).toContain(`${app}/deliveries?cursor=d-16`));
+    await waitFor(() =>
+      expect(within(screen.getByRole("navigation", { name: "Delivery pages" })).getByRole("link", { name: "← Previous" })).toHaveAttribute(
+        "href",
+        `/applications/${f.appId}/deliveries?cursor=d-15`,
+      ),
+    );
+    const next = screen.getByRole("navigation", { name: "Delivery pages" });
+    expect(within(next).getByRole("link", { name: "Next →" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries?cursor=d-6`);
+    expect(screen.getByRole("link", { name: "#15" })).toBeInTheDocument();
+  });
+
+  it("pages Builds 10 at a time: Previous and Next", async () => {
+    const api = fakeApi({
+      ...all,
+      [`${app}/builds?cursor=b-11`]: { builds: builds(10, 1), nextCursor: null, previousCursor: "b-10" },
+    });
+    renderAt(`/applications/${f.appId}/builds?cursor=b-11`, api);
+    const pager = await screen.findByRole("navigation", { name: "Build pages" });
+    expect(screen.getByRole("region", { name: "Builds" }).querySelectorAll("tbody tr")).toHaveLength(10);
+    expect(within(pager).getByRole("link", { name: "← Previous" })).toHaveAttribute("href", `/applications/${f.appId}/builds?cursor=b-10`);
+    expect(within(pager).getByText("Next →")).toHaveAttribute("aria-disabled", "true");
   });
 });

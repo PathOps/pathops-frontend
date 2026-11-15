@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import type { Resource } from "../api/useResource";
 
@@ -241,5 +241,44 @@ export function NotYet({ title, what, state }: { title: string; what: string; st
       <p>{what}</p>
       <p className="muted">{state}</p>
     </>
+  );
+}
+
+// usePageCursor is the page of a paged list: ?cursor= of the current URL,
+// so a page survives a refresh, can be linked and Back returns to the last.
+export function usePageCursor(): string {
+  const [params] = useSearchParams();
+  return params.get("cursor") ?? "";
+}
+
+// withCursor is path with the page's cursor, if any.
+export function withCursor(path: string, cursor: string): string {
+  if (!cursor) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(cursor)}`;
+}
+
+// Pager links a paged list's newer (left) and older (right) pages: links to
+// ?cursor=, shown disabled at an end; nothing when the list has one page.
+export function Pager({
+  label,
+  newer,
+  older,
+  newerLabel = "Previous",
+  olderLabel = "Next",
+}: {
+  label: string;
+  newer: string | null;
+  older: string | null;
+  newerLabel?: string;
+  olderLabel?: string;
+}) {
+  const { pathname } = useLocation();
+  if (!newer && !older) return null;
+  const to = (c: string) => `${pathname}?cursor=${encodeURIComponent(c)}`;
+  return (
+    <nav className="pager" aria-label={label}>
+      {newer ? <Link to={to(newer)}>← {newerLabel}</Link> : <span aria-disabled="true">← {newerLabel}</span>}
+      {older ? <Link to={to(older)}>{olderLabel} →</Link> : <span aria-disabled="true">{olderLabel} →</span>}
+    </nav>
   );
 }

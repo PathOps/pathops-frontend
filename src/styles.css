@@ -318,14 +318,6 @@ small,
 }
 /* The header's Inbox: a link like the header's buttons, with the unread
    count in a small badge. */
-header .inbox-link {
-  font-weight: normal;
-  color: var(--fg);
-  background: var(--button);
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  padding: 1px 6px;
-}
 .badge {
   display: inline-block;
   min-width: 1.2em;
@@ -395,4 +387,70 @@ tr.read .item-title {
   border-radius: 2px;
   padding: 3px 10px;
   text-decoration: none;
+}
+/* The layout: the sidebar (main navigation) beside the content; on a phone,
+   the sidebar is a row of links above it. */
+.layout {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+.layout > main {
+  flex: 1;
+  min-width: 0;
+}
+nav.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 0 150px;
+  margin-top: 24px;
+  position: sticky;
+  top: 16px;
+}
+nav.sidebar a {
+  color: var(--fg);
+  font-weight: normal;
+  text-decoration: none;
+  padding: 4px 8px;
+  border-left: 3px solid transparent;
+  border-radius: 2px;
+}
+nav.sidebar a:hover {
+  background: var(--button);
+}
+nav.sidebar a.active {
+  font-weight: bold;
+  background: var(--selected);
+  border-left-color: var(--link);
+}
+/* A paged list's Newer/Older (Previous/Next) links; an end is shown disabled. */
+nav.pager {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+nav.pager [aria-disabled="true"] {
+  color: var(--muted);
+  opacity: 0.6;
+}
+@media (max-width: 650px) {
+  .layout {
+    flex-direction: column;
+    gap: 0;
+  }
+  nav.sidebar {
+    flex-direction: row;
+    flex-basis: auto;
+    position: static;
+    margin-top: 12px;
+    gap: 8px;
+  }
+  nav.sidebar a {
+    border-left: none;
+    border-bottom: 3px solid transparent;
+  }
+  nav.sidebar a.active {
+    border-bottom-color: var(--link);
+  }
 }

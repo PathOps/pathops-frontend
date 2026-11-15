@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, NavLink, useLocation } from "react-router-dom";
 import type { Inbox, Me } from "../api/types";
 import { useResource } from "../api/useResource";
 import { signOut } from "../auth/oidc";
@@ -47,36 +47,44 @@ function ThemeToggle() {
   );
 }
 
-// InboxChanged is dispatched on window when the Inbox changed here (an item
-// read): the header's count reads it again.
+// InboxChanged is dispatched on window when the Inbox changed here (a
+// message read): the sidebar's count reads it again.
 export const InboxChanged = "pathops-inbox-changed";
 
-// InboxLink is the header's way to the Inbox, with the unread count. It is
+// Sidebar is the main navigation: the Inbox, with the whole Inbox's unread
+// count, and the Applications; the current section is marked. The count is
 // read with the page (no push channel): Refresh or another page shows a new
-// failure.
-function InboxLink() {
-  const inbox = useResource<Inbox>("/api/v1/inbox?unread=true");
+// message.
+function Sidebar() {
+  const inbox = useResource<Inbox>("/api/v1/inbox?unread=true&limit=1");
   const { reload } = inbox;
   useEffect(() => {
     window.addEventListener(InboxChanged, reload);
     return () => window.removeEventListener(InboxChanged, reload);
   }, [reload]);
   const unread = inbox.data?.unread ?? 0;
+  const { pathname } = useLocation();
+  const applications = pathname === "/" || pathname.startsWith("/applications");
   return (
-    <Link to="/inbox" className="inbox-link" aria-label={unread > 0 ? `Inbox, ${unread} unread` : "Inbox"}>
-      <span aria-hidden="true">✉</span> Inbox
-      {unread > 0 && (
-        <span className="badge" aria-hidden="true">
-          {unread}
-        </span>
-      )}
-    </Link>
+    <nav aria-label="Main" className="sidebar">
+      <NavLink to="/inbox" aria-label={unread > 0 ? `Inbox, ${unread} unread` : "Inbox"}>
+        <span aria-hidden="true">✉</span> Inbox
+        {unread > 0 && (
+          <span className="badge" aria-hidden="true">
+            {unread}
+          </span>
+        )}
+      </NavLink>
+      <Link to="/applications" className={applications ? "active" : undefined} aria-current={applications ? "page" : undefined}>
+        <span aria-hidden="true">▤</span> Applications
+      </Link>
+    </nav>
   );
 }
 
-// Page is a page of the signed-in UI: the breadcrumb (PathOps / Applications
-// / ... / here), the Inbox, the theme, the user and sign out, then the
-// content and the footer.
+// Page is a page of the signed-in UI: the header (the breadcrumb PathOps /
+// Applications / ... / here, the theme, the user and sign out), the sidebar
+// beside the content, and the footer.
 export function Page({ crumbs, children }: { crumbs?: ReactNode; children: ReactNode }) {
   const me = useResource<Me>("/api/v1/me");
   const [out, setOut] = useState(false);
@@ -84,11 +92,10 @@ export function Page({ crumbs, children }: { crumbs?: ReactNode; children: React
     <>
       <header>
         <nav aria-label="Breadcrumb">
-          <Link to="/">PathOps</Link> / <Link to="/">Applications</Link>
+          <Link to="/applications">PathOps</Link> / <Link to="/applications">Applications</Link>
           {crumbs}
         </nav>
         <span className="spacer" />
-        <InboxLink />
         <ThemeToggle />
         {me.data && <span className="user">{me.data.email ?? me.data.name ?? me.data.subject}</span>}
         <button
@@ -102,7 +109,10 @@ export function Page({ crumbs, children }: { crumbs?: ReactNode; children: React
         </button>
         {out && <Navigate to="/signed-out" replace />}
       </header>
-      <main>{children}</main>
+      <div className="layout">
+        <Sidebar />
+        <main>{children}</main>
+      </div>
       <footer>
         <small>
           © 2026 PathOps · Open source under the{" "}

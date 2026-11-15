@@ -282,8 +282,16 @@ export interface Me {
   cellId: string;
 }
 
-// The Inbox (Decision 0061): messages for the owner, newest first.
-export interface Inbox {
+// A page of a paged list (Tenant CP keyset pagination): the opaque cursors
+// of the older (next) and newer (previous) pages, null at an end.
+export interface Paged {
+  nextCursor: string | null;
+  previousCursor: string | null;
+}
+
+// The Inbox (Decision 0061): a page of the owner's messages, newest first;
+// unread counts the whole Inbox.
+export interface Inbox extends Paged {
   messages: InboxMessage[];
   unread: number;
 }

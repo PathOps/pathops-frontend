@@ -31,7 +31,8 @@ function SigningInNotice() {
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<ApplicationsPage />} />
+      <Route path="/" element={<Navigate to="/applications" replace />} />
+      <Route path="/applications" element={<ApplicationsPage />} />
       <Route path="/inbox" element={<InboxPage />} />
       <Route path="/inbox/:number" element={<InboxMessagePage />} />
       <Route path="/applications/:appId" element={<RedirectToDefault />} />

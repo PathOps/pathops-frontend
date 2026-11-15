@@ -4,14 +4,16 @@ import { useApi } from "../api/client";
 import type { Inbox, InboxMessage } from "../api/types";
 import { useResource } from "../api/useResource";
 import { InboxChanged, Page } from "../components/Page";
-import { Ago, ExternalLink, Fact, Facts, Loaded, RefreshButton, Toolbar } from "../components/ui";
+import { Ago, ExternalLink, Fact, Facts, Loaded, Pager, RefreshButton, Toolbar, usePageCursor, withCursor } from "../components/ui";
 
 // InboxPage is the owner's Inbox (Decision 0061), like a mail inbox: each
-// message's number, subject and when it arrived, newest first, unread ones
-// in bold with a dot. A message opens on its own page; nothing technical
-// (ids, types, deliveries, logs) is in the list.
+// message's number, subject and when it arrived, newest first, 25 a page
+// (Newer / Older, paged by the Tenant CP), unread ones in bold with a dot;
+// the unread count is the whole Inbox's. A message opens on its own page;
+// nothing technical (ids, types, deliveries, logs) is in the list.
 export function InboxPage() {
-  const inbox = useResource<Inbox>("/api/v1/inbox");
+  const cursor = usePageCursor();
+  const inbox = useResource<Inbox>(withCursor("/api/v1/inbox", cursor));
   const navigate = useNavigate();
   return (
     <Page crumbs={<> / Inbox</>}>
@@ -21,39 +23,42 @@ export function InboxPage() {
       </Toolbar>
       <Loaded resource={inbox} empty={(d) => d.messages.length === 0}>
         {(d) => (
-          <table aria-label="Inbox" className="inbox">
-            <thead>
-              <tr>
-                <th className="number">#</th>
-                <th>Subject</th>
-                <th className="received">Received</th>
-              </tr>
-            </thead>
-            <tbody>
-              {d.messages.map((m) => (
-                <tr
-                  key={m.id}
-                  className={m.read ? "read" : "unread"}
-                  aria-label={`#${m.number} ${m.subject}${m.read ? "" : " (unread)"}`}
-                  onClick={() => navigate(`/inbox/${m.number}`)}
-                >
-                  <td className="number">
-                    {!m.read && <span className="dot" title="Unread" />}
-                    {m.number}
-                  </td>
-                  <td>
-                    <Link to={`/inbox/${m.number}`} className="item-title">
-                      {m.subject}
-                    </Link>
-                    {m.application && <div className="muted">{m.application.name}</div>}
-                  </td>
-                  <td className="received">
-                    <Ago at={m.createdAt} /> ago
-                  </td>
+          <>
+            <table aria-label="Inbox" className="inbox">
+              <thead>
+                <tr>
+                  <th className="number">#</th>
+                  <th>Subject</th>
+                  <th className="received">Received</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {d.messages.map((m) => (
+                  <tr
+                    key={m.id}
+                    className={m.read ? "read" : "unread"}
+                    aria-label={`#${m.number} ${m.subject}${m.read ? "" : " (unread)"}`}
+                    onClick={() => navigate(`/inbox/${m.number}`)}
+                  >
+                    <td className="number">
+                      {!m.read && <span className="dot" title="Unread" />}
+                      {m.number}
+                    </td>
+                    <td>
+                      <Link to={`/inbox/${m.number}`} className="item-title">
+                        {m.subject}
+                      </Link>
+                      {m.application && <div className="muted">{m.application.name}</div>}
+                    </td>
+                    <td className="received">
+                      <Ago at={m.createdAt} /> ago
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pager label="Inbox pages" newer={d.previousCursor} older={d.nextCursor} newerLabel="Newer" olderLabel="Older" />
+          </>
         )}
       </Loaded>
     </Page>

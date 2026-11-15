@@ -37,12 +37,23 @@ reload signs in again through Dex's login session (shared with the CLI and
 Forgejo), without a password. Only the PKCE verifier, state and return path
 cross the redirect, in `sessionStorage`.
 
-## Screens (v0.3)
+## Screens (v0.5)
 
 Plain, document-like pages: bordered tables, bold colored statuses, a light
 and a dark theme (the system's, or the user's choice). Everything temporal is
 latest first; DeliveryRuns and Builds are named by their number within the
 Application (`#N`, from the Tenant Control Plane).
+
+A sidebar beside the content is the main navigation: **Inbox** (with the
+whole Inbox's unread count) and **Applications** (`/applications`; `/` opens
+it), the current one marked. On a phone it is a row of links above the
+content. The header keeps the breadcrumb, the theme, the user and sign out.
+
+Long lists are paged by the Tenant Control Plane (keyset cursors), never cut
+in the browser: the Inbox 25 a page (**Newer** / **Older**), Delivery Runs
+and Builds 10 a page (**Previous** / **Next**), newest first. The page is
+`?cursor=` in the URL, so a refresh, a copied link and Back keep it; an end
+of the list shows its control disabled, a list of one page none.
 
 - **Applications**: a table of the user's Applications: Production and
   Preflight (health, an "Open app" link and how long ago the current version
@@ -71,7 +82,7 @@ Application (`#N`, from the Tenant Control Plane).
   256 KiB, as the Tenant Control Plane bounds it; not streamed) opens in the
   row under the step, one at a time.
 
-- **Inbox** (Decision 0061): the header shows `✉ Inbox` with the unread
+- **Inbox** (Decision 0061): the sidebar shows `✉ Inbox` with the unread
   count. `/inbox` lists messages like a mail inbox, newest first: number,
   subject (with its Application) and when it arrived; unread ones in bold
   with a dot. Nothing technical (ids, types, deliveries, logs) is listed. A
