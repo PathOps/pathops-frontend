@@ -23,9 +23,12 @@ export interface Api {
 }
 
 // signIn sends the browser to the Cell's Dex, to come back to the current page.
+// The page being left (no token yet) is replaced, not kept in the history:
+// with the callback's own replace, a sign-in (a reload included) adds no
+// entry, so Back leaves the page instead of signing in to it again.
 export async function signIn(): Promise<never> {
   const url = await authorizationUrl(await loadConfig(), window.location.pathname + window.location.search);
-  window.location.assign(url);
+  window.location.replace(url);
   throw new SigningIn();
 }
 
