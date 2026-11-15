@@ -16,7 +16,7 @@ export function InboxPage() {
   const inbox = useResource<Inbox>(withCursor("/api/v1/inbox", cursor));
   const navigate = useNavigate();
   return (
-    <Page crumbs={<> / Inbox</>}>
+    <Page inbox crumbs={<> / Inbox</>}>
       <h1>Inbox</h1>
       <Toolbar actions={<RefreshButton resource={inbox} />}>
         {inbox.data && (inbox.data.unread > 0 ? <strong>{inbox.data.unread} unread</strong> : "Nothing unread.")}
@@ -87,6 +87,7 @@ export function InboxMessagePage() {
   }, [m, api]);
   return (
     <Page
+      inbox
       crumbs={
         <>
           {" "}

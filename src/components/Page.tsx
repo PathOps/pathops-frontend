@@ -69,7 +69,7 @@ function Sidebar() {
     <nav aria-label="Main" className="sidebar">
       <div className="brand">PathOps</div>
       <NavLink to="/inbox" aria-label={unread > 0 ? `Inbox, ${unread} unread` : "Inbox"}>
-        <span aria-hidden="true">✉</span> Inbox
+        Inbox
         {unread > 0 && (
           <span className="badge" aria-hidden="true">
             {unread}
@@ -77,16 +77,18 @@ function Sidebar() {
         )}
       </NavLink>
       <Link to="/applications" className={applications ? "active" : undefined} aria-current={applications ? "page" : undefined}>
-        <span aria-hidden="true">▤</span> Applications
+        Applications
       </Link>
     </nav>
   );
 }
 
 // Page is a page of the signed-in UI: the sidebar along the window's left
-// edge, and beside it the header (the breadcrumb PathOps / Applications / ...
-// / here, the theme, the user and sign out), the content and the footer.
-export function Page({ crumbs, children }: { crumbs?: ReactNode; children: ReactNode }) {
+// edge, and beside it the header (the breadcrumb PathOps / <section> / ... /
+// here, the theme, the user and sign out), the content and the footer. The
+// section is the sidebar's: the Applications (default) or the Inbox, whose
+// pages give their own crumbs.
+export function Page({ crumbs, inbox, children }: { crumbs?: ReactNode; inbox?: boolean; children: ReactNode }) {
   const me = useResource<Me>("/api/v1/me");
   const [out, setOut] = useState(false);
   return (
@@ -95,7 +97,13 @@ export function Page({ crumbs, children }: { crumbs?: ReactNode; children: React
       <div className="content">
         <header>
           <nav aria-label="Breadcrumb">
-            <Link to="/applications">PathOps</Link> / <Link to="/applications">Applications</Link>
+            <Link to="/applications">PathOps</Link>
+            {!inbox && (
+              <>
+                {" "}
+                / <Link to="/applications">Applications</Link>
+              </>
+            )}
             {crumbs}
           </nav>
           <span className="spacer" />

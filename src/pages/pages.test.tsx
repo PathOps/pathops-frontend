@@ -390,7 +390,7 @@ describe("Inbox", () => {
     const api = fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true&limit=1": { messages: [], unread: 0 } });
     renderAt("/", api);
     await waitFor(() => expect(api.calls).toContain("/api/v1/inbox?unread=true&limit=1"));
-    expect(screen.getByRole("link", { name: "Inbox" })).toHaveTextContent(/^✉ Inbox$/);
+    expect(screen.getByRole("link", { name: "Inbox" })).toHaveTextContent(/^Inbox$/);
   });
 
   it("lists messages like a mail inbox: number, subject, received; unread stands out; nothing technical", async () => {
@@ -625,5 +625,27 @@ describe("Pagination", () => {
     expect(screen.getByRole("region", { name: "Builds" }).querySelectorAll("tbody tr")).toHaveLength(10);
     expect(within(pager).getByRole("link", { name: "← Previous" })).toHaveAttribute("href", `/applications/${f.appId}/builds?cursor=b-10`);
     expect(within(pager).getByText("Next →")).toHaveAttribute("aria-disabled", "true");
+  });
+});
+
+describe("Breadcrumb", () => {
+  it("is PathOps / Inbox on the Inbox's pages, PathOps / Applications on the Applications'", async () => {
+    const { unmount } = renderAt("/inbox/3", fakeApi({ "/api/v1/inbox/3": inboxMessage({ read: true }) }));
+    const crumbs = () => screen.getByRole("navigation", { name: "Breadcrumb" });
+    await screen.findByRole("article", { name: "Message #3" });
+    expect(crumbs().textContent).toBe("PathOps / Inbox / #3");
+    expect(within(crumbs()).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/applications", "/inbox"]);
+    unmount();
+    const r = renderAt("/inbox", fakeApi({ "/api/v1/inbox": { messages: [], unread: 0, nextCursor: null, previousCursor: null } }));
+    expect(crumbs().textContent).toBe("PathOps / Inbox");
+    r.unmount();
+    renderAt("/applications", fakeApi({ "/api/v1/applications": { applications: [] } }));
+    expect(crumbs().textContent).toBe("PathOps / Applications");
+  });
+
+  it("the sidebar's links are words, no icons", () => {
+    renderAt("/applications", fakeApi({ "/api/v1/applications": { applications: [] } }));
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Inbox", "Applications"]);
   });
 });

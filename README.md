@@ -47,7 +47,9 @@ Application (`#N`, from the Tenant Control Plane).
 A sidebar along the window's left edge, full height, is the main
 navigation: **Inbox** (with the whole Inbox's unread count) and
 **Applications** (`/applications`; `/` opens it), the current one marked;
-the page sits beside it. On a phone it is a bar of links above the content. The header keeps the breadcrumb, the theme, the user and sign out.
+the page sits beside it, on the same background. On a phone it is a bar of
+links above the content. The breadcrumb starts at the section: PathOps /
+Applications / ..., or PathOps / Inbox / #N. The header keeps the breadcrumb, the theme, the user and sign out.
 
 Long lists are paged by the Tenant Control Plane (keyset cursors), never cut
 in the browser: the Inbox 25 a page (**Newer** / **Older**), Delivery Runs

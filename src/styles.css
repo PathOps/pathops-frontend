@@ -11,7 +11,6 @@
   --pre: #f4f3f2;
   --button: #efefef;
   --selected: #ddd;
-  --sidebar: #f2f2f2;
   --link: #0645ad;
   --ok: #16803c;
   --error: #c62828;
@@ -28,7 +27,6 @@
     --pre: #222;
     --button: #303030;
     --selected: #444;
-    --sidebar: #202020;
     --link: #83b6ff;
     --ok: #67d391;
     --error: #ff8585;
@@ -45,7 +43,6 @@
   --pre: #222;
   --button: #303030;
   --selected: #444;
-  --sidebar: #202020;
   --link: #83b6ff;
   --ok: #67d391;
   --error: #ff8585;
@@ -412,7 +409,7 @@ nav.sidebar {
   width: 200px;
   display: flex;
   flex-direction: column;
-  background: var(--sidebar);
+  background: var(--bg);
   border-right: 1px solid var(--border);
 }
 nav.sidebar .brand {
