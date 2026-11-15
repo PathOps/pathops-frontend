@@ -11,6 +11,7 @@
   --pre: #f4f3f2;
   --button: #efefef;
   --selected: #ddd;
+  --sidebar: #f2f2f2;
   --link: #0645ad;
   --ok: #16803c;
   --error: #c62828;
@@ -27,6 +28,7 @@
     --pre: #222;
     --button: #303030;
     --selected: #444;
+    --sidebar: #202020;
     --link: #83b6ff;
     --ok: #67d391;
     --error: #ff8585;
@@ -43,6 +45,7 @@
   --pre: #222;
   --button: #303030;
   --selected: #444;
+  --sidebar: #202020;
   --link: #83b6ff;
   --ok: #67d391;
   --error: #ff8585;
@@ -388,33 +391,43 @@ tr.read .item-title {
   padding: 3px 10px;
   text-decoration: none;
 }
-/* The layout: the sidebar (main navigation) beside the content; on a phone,
-   the sidebar is a row of links above it. */
-.layout {
-  display: flex;
-  gap: 28px;
-  align-items: flex-start;
+/* A signed-in page: the sidebar (main navigation) fixed along the window's
+   left edge, full height; the header, content and footer beside it, centered
+   in the rest of the window. On a phone the sidebar is a bar above. */
+body:has(nav.sidebar) {
+  max-width: none;
+  margin: 0;
+  padding: 0 0 0 200px;
 }
-.layout > main {
-  flex: 1;
-  min-width: 0;
+.content {
+  max-width: 1100px;
+  margin: 35px auto;
+  padding: 0 28px;
 }
 nav.sidebar {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 200px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  flex: 0 0 150px;
-  margin-top: 24px;
-  position: sticky;
-  top: 16px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+}
+nav.sidebar .brand {
+  font-weight: bold;
+  font-size: 1.15em;
+  padding: 26px 20px 18px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
 }
 nav.sidebar a {
   color: var(--fg);
   font-weight: normal;
   text-decoration: none;
-  padding: 4px 8px;
+  padding: 9px 20px 9px 17px;
   border-left: 3px solid transparent;
-  border-radius: 2px;
 }
 nav.sidebar a:hover {
   background: var(--button);
@@ -435,18 +448,29 @@ nav.pager [aria-disabled="true"] {
   opacity: 0.6;
 }
 @media (max-width: 650px) {
-  .layout {
-    flex-direction: column;
-    gap: 0;
+  body:has(nav.sidebar) {
+    padding: 0;
+  }
+  .content {
+    margin: 14px auto;
+    padding: 0 16px;
   }
   nav.sidebar {
-    flex-direction: row;
-    flex-basis: auto;
     position: static;
-    margin-top: 12px;
-    gap: 8px;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  nav.sidebar .brand {
+    padding: 10px 16px;
+    border-bottom: none;
+    margin-bottom: 0;
   }
   nav.sidebar a {
+    padding: 10px 12px 7px;
     border-left: none;
     border-bottom: 3px solid transparent;
   }

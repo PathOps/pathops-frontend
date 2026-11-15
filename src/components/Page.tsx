@@ -67,6 +67,7 @@ function Sidebar() {
   const applications = pathname === "/" || pathname.startsWith("/applications");
   return (
     <nav aria-label="Main" className="sidebar">
+      <div className="brand">PathOps</div>
       <NavLink to="/inbox" aria-label={unread > 0 ? `Inbox, ${unread} unread` : "Inbox"}>
         <span aria-hidden="true">✉</span> Inbox
         {unread > 0 && (
@@ -82,45 +83,45 @@ function Sidebar() {
   );
 }
 
-// Page is a page of the signed-in UI: the header (the breadcrumb PathOps /
-// Applications / ... / here, the theme, the user and sign out), the sidebar
-// beside the content, and the footer.
+// Page is a page of the signed-in UI: the sidebar along the window's left
+// edge, and beside it the header (the breadcrumb PathOps / Applications / ...
+// / here, the theme, the user and sign out), the content and the footer.
 export function Page({ crumbs, children }: { crumbs?: ReactNode; children: ReactNode }) {
   const me = useResource<Me>("/api/v1/me");
   const [out, setOut] = useState(false);
   return (
     <>
-      <header>
-        <nav aria-label="Breadcrumb">
-          <Link to="/applications">PathOps</Link> / <Link to="/applications">Applications</Link>
-          {crumbs}
-        </nav>
-        <span className="spacer" />
-        <ThemeToggle />
-        {me.data && <span className="user">{me.data.email ?? me.data.name ?? me.data.subject}</span>}
-        <button
-          type="button"
-          onClick={() => {
-            signOut();
-            setOut(true);
-          }}
-        >
-          Sign out
-        </button>
-        {out && <Navigate to="/signed-out" replace />}
-      </header>
-      <div className="layout">
-        <Sidebar />
+      <Sidebar />
+      <div className="content">
+        <header>
+          <nav aria-label="Breadcrumb">
+            <Link to="/applications">PathOps</Link> / <Link to="/applications">Applications</Link>
+            {crumbs}
+          </nav>
+          <span className="spacer" />
+          <ThemeToggle />
+          {me.data && <span className="user">{me.data.email ?? me.data.name ?? me.data.subject}</span>}
+          <button
+            type="button"
+            onClick={() => {
+              signOut();
+              setOut(true);
+            }}
+          >
+            Sign out
+          </button>
+          {out && <Navigate to="/signed-out" replace />}
+        </header>
         <main>{children}</main>
+        <footer>
+          <small>
+            © 2026 PathOps · Open source under the{" "}
+            <a href="https://github.com/PathOps/pathops-frontend/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
+              MIT License ↗
+            </a>
+          </small>
+        </footer>
       </div>
-      <footer>
-        <small>
-          © 2026 PathOps · Open source under the{" "}
-          <a href="https://github.com/PathOps/pathops-frontend/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
-            MIT License ↗
-          </a>
-        </small>
-      </footer>
     </>
   );
 }
