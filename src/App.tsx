@@ -6,7 +6,7 @@ import { ApplicationPage } from "./pages/ApplicationPage";
 import { ApplicationsPage } from "./pages/ApplicationsPage";
 import { BuildPage } from "./pages/BuildPage";
 import { DeliveryPage } from "./pages/DeliveryPage";
-import { InboxPage } from "./pages/InboxPage";
+import { InboxMessagePage, InboxPage } from "./pages/InboxPage";
 
 // SigningInNotice is "Signing in" with dots that come and go (none, one,
 // two, three, again).
@@ -33,6 +33,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<ApplicationsPage />} />
       <Route path="/inbox" element={<InboxPage />} />
+      <Route path="/inbox/:number" element={<InboxMessagePage />} />
       <Route path="/applications/:appId" element={<RedirectToDefault />} />
       <Route path="/applications/:appId/deliveries/:runId" element={<DeliveryPage />} />
       <Route path="/applications/:appId/builds/:buildId" element={<BuildPage />} />

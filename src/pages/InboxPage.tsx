@@ -1,85 +1,54 @@
-import { Link } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApi } from "../api/client";
-import type { Inbox, InboxItem } from "../api/types";
+import type { Inbox, InboxMessage } from "../api/types";
 import { useResource } from "../api/useResource";
 import { InboxChanged, Page } from "../components/Page";
-import { Ago, ExternalLink, Loaded, RefreshButton, Toolbar } from "../components/ui";
+import { Ago, ExternalLink, Fact, Facts, Loaded, RefreshButton, Toolbar } from "../components/ui";
 
-// InboxPage is the owner's Inbox (Decision 0061): failures that need
-// attention, newest first, unread ones in bold. Opening an item's delivery
-// or downloading its logs marks it read; so does "Mark read". The logs are
-// downloaded from the Cell's Artifact Store directly (its own Dex sign-in),
-// never through the Tenant CP.
+// InboxPage is the owner's Inbox (Decision 0061), like a mail inbox: each
+// message's number, subject and when it arrived, newest first, unread ones
+// in bold with a dot. A message opens on its own page; nothing technical
+// (ids, types, deliveries, logs) is in the list.
 export function InboxPage() {
   const inbox = useResource<Inbox>("/api/v1/inbox");
-  const api = useApi();
-  const read = (it: InboxItem) => {
-    if (it.read) return;
-    api
-      .post<InboxItem>(`/api/v1/inbox/${it.id}/read`)
-      .then(() => {
-        inbox.reload();
-        window.dispatchEvent(new Event(InboxChanged));
-      })
-      .catch(() => inbox.reload());
-  };
+  const navigate = useNavigate();
   return (
     <Page crumbs={<> / Inbox</>}>
       <h1>Inbox</h1>
       <Toolbar actions={<RefreshButton resource={inbox} />}>
-        Failures that need your attention.
-        {inbox.data && inbox.data.unread > 0 && <strong> {inbox.data.unread} unread.</strong>}
+        {inbox.data && (inbox.data.unread > 0 ? <strong>{inbox.data.unread} unread</strong> : "Nothing unread.")}
       </Toolbar>
-      <Loaded resource={inbox} empty={(d) => d.items.length === 0}>
+      <Loaded resource={inbox} empty={(d) => d.messages.length === 0}>
         {(d) => (
-          <table aria-label="Inbox">
+          <table aria-label="Inbox" className="inbox">
             <thead>
               <tr>
-                <th>Item</th>
-                <th>Application</th>
-                <th>Delivery</th>
-                <th>Received</th>
-                <th>Actions</th>
+                <th className="number">#</th>
+                <th>Subject</th>
+                <th className="received">Received</th>
               </tr>
             </thead>
             <tbody>
-              {d.items.map((it) => (
-                <tr key={it.id} className={it.read ? "read" : "unread"} aria-label={`${it.title}${it.read ? "" : " (unread)"}`}>
-                  <td>
-                    {!it.read && <span className="dot" title="Unread" />}
-                    <span className="item-title">{it.title}</span>
-                    <br />
-                    <span className="muted">{it.message}</span>
-                  </td>
-                  <td>{it.applicationName}</td>
-                  <td>
-                    {it.delivery ? (
-                      <>
-                        #{it.delivery.number} <code>{it.delivery.head12}</code>
-                      </>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
+              {d.messages.map((m) => (
+                <tr
+                  key={m.id}
+                  className={m.read ? "read" : "unread"}
+                  aria-label={`#${m.number} ${m.subject}${m.read ? "" : " (unread)"}`}
+                  onClick={() => navigate(`/inbox/${m.number}`)}
+                >
+                  <td className="number">
+                    {!m.read && <span className="dot" title="Unread" />}
+                    {m.number}
                   </td>
                   <td>
-                    <Ago at={it.createdAt} />
+                    <Link to={`/inbox/${m.number}`} className="item-title">
+                      {m.subject}
+                    </Link>
+                    {m.application && <div className="muted">{m.application.name}</div>}
                   </td>
-                  <td className="actions">
-                    {it.delivery && (
-                      <Link to={`/applications/${it.applicationId}/deliveries/${it.delivery.id}`} onClick={() => read(it)}>
-                        View delivery
-                      </Link>
-                    )}
-                    {it.artifact?.downloadUrl && (
-                      <span onClick={() => read(it)}>
-                        <ExternalLink href={it.artifact.downloadUrl}>Download logs</ExternalLink>
-                      </span>
-                    )}
-                    {!it.read && (
-                      <button type="button" onClick={() => read(it)}>
-                        Mark read
-                      </button>
-                    )}
+                  <td className="received">
+                    <Ago at={m.createdAt} /> ago
                   </td>
                 </tr>
               ))}
@@ -88,5 +57,100 @@ export function InboxPage() {
         )}
       </Loaded>
     </Page>
+  );
+}
+
+// InboxMessagePage is one message, by its number: its subject, when it
+// arrived, its text, what it is about and the actions its references give
+// (none for a reference it does not have). Opening it marks it read.
+export function InboxMessagePage() {
+  const { number = "" } = useParams();
+  const valid = /^[1-9][0-9]{0,17}$/.test(number);
+  const msg = useResource<InboxMessage>(`/api/v1/inbox/${valid ? number : "0"}`);
+  const api = useApi();
+  const marked = useRef(false);
+  const m = msg.data;
+  useEffect(() => {
+    if (!m || m.read || marked.current) return;
+    marked.current = true;
+    api
+      .post<InboxMessage>(`/api/v1/inbox/${m.number}/read`)
+      .then(() => window.dispatchEvent(new Event(InboxChanged)))
+      .catch(() => {
+        marked.current = false;
+      });
+  }, [m, api]);
+  return (
+    <Page
+      crumbs={
+        <>
+          {" "}
+          / <Link to="/inbox">Inbox</Link> / #{number}
+        </>
+      }
+    >
+      <p>
+        <Link to="/inbox">← Inbox</Link>
+      </p>
+      <Loaded resource={msg}>{(m) => <Message m={m} />}</Loaded>
+    </Page>
+  );
+}
+
+function Message({ m }: { m: InboxMessage }) {
+  const app = m.application;
+  return (
+    <article className="message" aria-label={`Message #${m.number}`}>
+      <div className="muted">#{m.number}</div>
+      <h1>{m.subject}</h1>
+      <p className="muted">
+        <Received at={m.createdAt} />
+      </p>
+      <div className="message-body">
+        {m.body.split(/\n{2,}/).map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
+      </div>
+      {(app || m.delivery || m.build) && (
+        <Facts label="About">
+          {app && <Fact label="Application">{app.name}</Fact>}
+          {m.delivery && (
+            <Fact label="Revision">
+              <code title={m.delivery.sourceRevision}>{m.delivery.head12}</code>
+            </Fact>
+          )}
+          {m.delivery && <Fact label="Delivery">#{m.delivery.number}</Fact>}
+          {m.build && <Fact label="Build">#{m.build.number}</Fact>}
+        </Facts>
+      )}
+      <div className="message-actions">
+        {app && (
+          <Link to={`/applications/${app.id}`}>
+            View application
+          </Link>
+        )}
+        {app && m.delivery && (
+          <Link to={`/applications/${app.id}/deliveries/${m.delivery.id}`}>
+            View delivery
+          </Link>
+        )}
+        {app && m.build && (
+          <Link to={`/applications/${app.id}/builds/${m.build.id}`}>
+            View build
+          </Link>
+        )}
+        {m.artifact?.downloadUrl && <ExternalLink href={m.artifact.downloadUrl}>Download logs</ExternalLink>}
+      </div>
+    </article>
+  );
+}
+
+// Received is the full local date and time, with the year.
+function Received({ at }: { at: string }) {
+  const d = new Date(at);
+  return (
+    <time dateTime={at} title={d.toISOString()}>
+      {d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+    </time>
   );
 }

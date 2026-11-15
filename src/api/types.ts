@@ -282,24 +282,34 @@ export interface Me {
   cellId: string;
 }
 
-// The Inbox (Decision 0061): what needs the owner's attention, newest first.
+// The Inbox (Decision 0061): messages for the owner, newest first.
 export interface Inbox {
-  items: InboxItem[];
+  messages: InboxMessage[];
   unread: number;
 }
 
-export interface InboxItem {
+// An Inbox message: its number is its human name (its id stays its
+// identity); subject and body are plain text as the Cell wrote them. Each
+// reference is null when the message has none, and so is the action it
+// gives.
+export interface InboxMessage {
   id: string;
-  applicationId: string;
-  applicationName: string;
+  number: number;
   type: string;
-  title: string;
-  message: string;
+  subject: string;
+  body: string;
   read: boolean;
   readAt: Iso | null;
   createdAt: Iso;
+  applicationId: string | null;
+  deliveryRunId: string | null;
+  deliveryStepId: string | null;
+  buildId: string | null;
+  artifactId: string | null;
+  application: { id: string; name: string } | null;
   delivery: { id: string; number: number; sourceRevision: string; head12: string; status: string } | null;
+  build: { id: string; number: number; status: string } | null;
   // downloadUrl is the Cell Artifact Store's own page: the browser signs in
   // there (Dex) and downloads directly; the Tenant CP never serves the bytes.
-  artifact: { id: string; type: string; mediaType: string; size: number; sha256: string; downloadUrl: string } | null;
+  artifact: { id: string; type: string; mediaType: string; size: number; sha256: string; downloadUrl: string; createdAt: Iso } | null;
 }

@@ -72,15 +72,19 @@ Application (`#N`, from the Tenant Control Plane).
   row under the step, one at a time.
 
 - **Inbox** (Decision 0061): the header shows `✉ Inbox` with the unread
-  count. The page lists what needs the owner's attention, newest first
-  (v1: a build that failed), unread items in bold: the Application, the
-  delivery (`#N`, HEAD12), how long ago, **View delivery** and **Download
-  logs**. Download opens the Cell's Artifact Store at the Artifact's URL: the
-  store signs the browser in with the Cell's Dex (an existing session is
-  reused) and serves the file itself; the UI holds no Artifact Store
-  credential and the Tenant Control Plane never carries the bytes. Opening
-  the delivery, downloading or "Mark read" marks the item read
-  (`POST /api/v1/inbox/{id}/read`, the UI's only change).
+  count. `/inbox` lists messages like a mail inbox, newest first: number,
+  subject (with its Application) and when it arrived; unread ones in bold
+  with a dot. Nothing technical (ids, types, deliveries, logs) is listed. A
+  row opens `/inbox/<number>`: the subject, the full received time, the body
+  as the Cell wrote it, what it is about (Application, revision, delivery
+  and build numbers) and the actions its references give, each only when the
+  message has that reference: **View application**, **View delivery**,
+  **View build**, **Download logs**. Download opens the Cell's Artifact
+  Store at the Artifact's URL: the store signs the browser in with the
+  Cell's Dex (an existing session is reused) and serves the file itself; the
+  UI holds no Artifact Store credential and the Tenant Control Plane never
+  carries the bytes. Opening a message marks it read
+  (`POST /api/v1/inbox/<number>/read`, the UI's only change).
 
 Repository links open through Forgejo's sign-in
 (`/user/login?redirect_to=<path>`), which goes to Dex and lands on the

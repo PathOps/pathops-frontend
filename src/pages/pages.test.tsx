@@ -344,89 +344,169 @@ describe("Duration", () => {
   });
 });
 
-const inboxItem = (over: Record<string, unknown> = {}) => ({
-  id: "item-1",
-  applicationId: f.appId,
-  applicationName: "manual-web",
+const BODY =
+  "PathOps couldn't build revision cccccccccccc of manual-web.\n\nThe build stopped before an image could be produced.\n\n" +
+  "You can review the delivery and download the build logs for more information.";
+const DOWNLOAD = `https://artifacts-canary.demo.pathops.io/objects/applications/${f.appId}/deliveries/run-bad/build-failure.tar.gz`;
+
+const inboxMessage = (over: Record<string, unknown> = {}) => ({
+  id: "77777777-7777-4777-8777-777777777773",
+  number: 3,
   type: "BUILD_FAILED",
-  title: "Build failed",
-  message: "BUILD_APPLICATION failed for revision cccccccccccc",
+  subject: "The build for manual-web failed",
+  body: BODY,
   read: false,
   readAt: null,
-  createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+  createdAt: new Date(Date.now() - 65 * 60 * 1000).toISOString(),
+  applicationId: f.appId,
+  deliveryRunId: "run-bad",
+  deliveryStepId: "step-bad",
+  buildId: "build-bad",
+  artifactId: "art-1",
+  application: { id: f.appId, name: "manual-web" },
   delivery: { id: "run-bad", number: 2, sourceRevision: "c".repeat(40), head12: "cccccccccccc", status: "FAILED" },
+  build: { id: "build-bad", number: 2, status: "FAILED" },
   artifact: {
     id: "art-1",
     type: "BUILD_FAILURE_LOGS",
     mediaType: "application/gzip",
     size: 1234,
     sha256: "ab".repeat(32),
-    downloadUrl: `https://artifacts-canary.demo.pathops.io/objects/applications/${f.appId}/deliveries/run-bad/build-failure.tar.gz`,
+    downloadUrl: DOWNLOAD,
+    createdAt: "2026-11-15T10:00:00Z",
   },
   ...over,
 });
 
 describe("Inbox", () => {
   it("shows the unread count in the header and links to the Inbox", async () => {
-    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true": { items: [inboxItem()], unread: 1 } }));
+    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true": { messages: [inboxMessage()], unread: 1 } }));
     const link = await screen.findByRole("link", { name: "Inbox, 1 unread" });
     expect(link).toHaveAttribute("href", "/inbox");
     expect(link).toHaveTextContent(/Inbox\s*1$/);
   });
 
-  it("shows no badge without unread items", async () => {
-    const api = fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true": { items: [], unread: 0 } });
+  it("shows no badge without unread messages", async () => {
+    const api = fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/inbox?unread=true": { messages: [], unread: 0 } });
     renderAt("/", api);
     await waitFor(() => expect(api.calls).toContain("/api/v1/inbox?unread=true"));
     expect(screen.getByRole("link", { name: "Inbox" })).toHaveTextContent(/^✉ Inbox$/);
   });
 
-  it("lists the items, unread in bold, with the delivery and a direct download from the Artifact Store", async () => {
-    const read = inboxItem({ id: "item-0", title: "Older failure", read: true, readAt: "2026-11-15T10:00:00Z" });
-    renderAt("/inbox", fakeApi({ "/api/v1/inbox": { items: [inboxItem(), read], unread: 1 } }));
+  it("lists messages like a mail inbox: number, subject, received; unread stands out; nothing technical", async () => {
+    const older = inboxMessage({ id: "msg-2", number: 2, read: true, readAt: "2026-11-15T10:00:00Z" });
+    renderAt("/inbox", fakeApi({ "/api/v1/inbox": { messages: [inboxMessage(), older], unread: 1 } }));
     const table = await screen.findByRole("table", { name: "Inbox" });
     const rows = within(table).getAllByRole("row");
     expect(rows.map((r) => r.className)).toEqual(["", "unread", "read"]);
-    expect(within(rows[1]).getByText("Build failed")).toHaveClass("item-title");
-    expect(rows[1]).toHaveTextContent("BUILD_APPLICATION failed for revision cccccccccccc");
-    expect(rows[1]).toHaveTextContent("manual-web");
-    expect(rows[1]).toHaveTextContent("#2 cccccccccccc");
-    expect(within(rows[1]).getByRole("link", { name: "View delivery" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-bad`);
-    const dl = within(rows[1]).getByRole("link", { name: "Download logs ↗" });
-    expect(dl).toHaveAttribute("href", `https://artifacts-canary.demo.pathops.io/objects/applications/${f.appId}/deliveries/run-bad/build-failure.tar.gz`);
-    expect(dl).toHaveAttribute("target", "_blank");
-    expect(dl).toHaveAttribute("rel", "noopener noreferrer");
-    expect(within(rows[1]).getByRole("button", { name: "Mark read" })).toBeInTheDocument();
-    expect(within(rows[2]).queryByRole("button", { name: "Mark read" })).not.toBeInTheDocument();
-    expect(screen.getByText("1 unread.")).toBeInTheDocument();
+    expect(within(rows[0]).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["#", "Subject", "Received"]);
+    expect(rows[1]).toHaveAccessibleName("#3 The build for manual-web failed (unread)");
+    expect(within(rows[1]).getByTitle("Unread")).toHaveClass("dot");
+    expect(within(rows[2]).queryByTitle("Unread")).not.toBeInTheDocument();
+    const subject = within(rows[1]).getByRole("link", { name: "The build for manual-web failed" });
+    expect(subject).toHaveAttribute("href", "/inbox/3");
+    expect(subject).toHaveClass("item-title");
+    expect(rows[1]).toHaveTextContent(/^3The build for manual-web failedmanual-web1h ago$/);
+    expect(within(rows[2]).getByRole("link")).toHaveAttribute("href", "/inbox/2");
+    expect(screen.getByText("1 unread")).toBeInTheDocument();
+    // No ids, types, deliveries, builds, logs or body in the list.
+    for (const internal of ["77777777", "BUILD_", "cccccccccccc", "#2", "Download", "View", "PathOps couldn't"]) {
+      expect(table).not.toHaveTextContent(internal);
+    }
   });
 
-  it("marks an item read on click and reads the Inbox again", async () => {
+  it("opens a message from its row", async () => {
     const api = fakeApi({
-      "/api/v1/inbox": { items: [inboxItem()], unread: 1 },
-      "/api/v1/inbox?unread=true": { items: [inboxItem()], unread: 1 },
-      "POST /api/v1/inbox/item-1/read": inboxItem({ read: true, readAt: "2026-11-15T10:10:00Z" }),
+      "/api/v1/inbox": { messages: [inboxMessage()], unread: 1 },
+      "/api/v1/inbox/3": inboxMessage(),
+      "POST /api/v1/inbox/3/read": inboxMessage({ read: true }),
     });
     renderAt("/inbox", api);
-    await userEvent.click(await screen.findByRole("button", { name: "Mark read" }));
-    await waitFor(() => expect(api.calls).toContain("POST /api/v1/inbox/item-1/read"));
-    await waitFor(() => expect(api.calls.filter((c) => c === "/api/v1/inbox").length).toBe(2));
+    const table = await screen.findByRole("table", { name: "Inbox" });
+    await userEvent.click(within(table).getByText("1h", { exact: false }));
+    expect(await screen.findByRole("heading", { level: 1, name: "The build for manual-web failed" })).toBeInTheDocument();
+    expect(api.calls).toContain("/api/v1/inbox/3");
+  });
+
+  it("shows a message on its own page and marks it read", async () => {
+    const at = "2026-11-15T14:02:00Z";
+    const api = fakeApi({
+      "/api/v1/inbox/3": inboxMessage({ createdAt: at }),
+      "/api/v1/inbox?unread=true": { messages: [inboxMessage()], unread: 1 },
+      "POST /api/v1/inbox/3/read": inboxMessage({ read: true, readAt: "2026-11-15T12:00:00Z" }),
+    });
+    renderAt("/inbox/3", api);
+    const msg = await screen.findByRole("article", { name: "Message #3" });
+    expect(screen.getByRole("link", { name: "← Inbox" })).toHaveAttribute("href", "/inbox");
+    expect(within(msg).getByRole("heading", { level: 1 })).toHaveTextContent("The build for manual-web failed");
+    expect(within(msg).getByText("#3")).toBeInTheDocument();
+    expect(msg.querySelector("time")).toHaveAttribute("dateTime", at);
+    expect(msg.querySelector("time")).toHaveTextContent("2026");
+    // The body's paragraphs, as written.
+    expect([...msg.querySelectorAll(".message-body p")].map((p) => p.textContent)).toEqual([
+      "PathOps couldn't build revision cccccccccccc of manual-web.",
+      "The build stopped before an image could be produced.",
+      "You can review the delivery and download the build logs for more information.",
+    ]);
+    const about = within(msg).getByRole("table", { name: "About" });
+    expect(within(about).getAllByRole("row").map((r) => r.textContent)).toEqual([
+      "Applicationmanual-web",
+      "Revisioncccccccccccc",
+      "Delivery#2",
+      "Build#2",
+    ]);
+    expect(within(msg).getByRole("link", { name: "View application" })).toHaveAttribute("href", `/applications/${f.appId}`);
+    expect(within(msg).getByRole("link", { name: "View delivery" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-bad`);
+    expect(within(msg).getByRole("link", { name: "View build" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-bad`);
+    const dl = within(msg).getByRole("link", { name: "Download logs ↗" });
+    expect(dl).toHaveAttribute("href", DOWNLOAD);
+    expect(dl).toHaveAttribute("target", "_blank");
+    expect(dl).toHaveAttribute("rel", "noopener noreferrer");
+    for (const internal of ["BUILD_FAILED", "BUILD_APPLICATION", "BUILD_FAILURE_LOGS", "77777777", f.appId]) {
+      expect(msg).not.toHaveTextContent(internal);
+    }
+    // Opening it read it, once, and the header's count was read again.
+    await waitFor(() => expect(api.calls.filter((c) => c === "POST /api/v1/inbox/3/read")).toHaveLength(1));
     await waitFor(() => expect(api.calls.filter((c) => c === "/api/v1/inbox?unread=true").length).toBe(2));
   });
 
-  it("marks an item read when its delivery is opened", async () => {
-    const api = fakeApi({
-      ...all,
-      "/api/v1/inbox": { items: [inboxItem()], unread: 1 },
-      "POST /api/v1/inbox/item-1/read": inboxItem({ read: true }),
-    });
-    renderAt("/inbox", api);
-    await userEvent.click(await screen.findByRole("link", { name: "View delivery" }));
-    await waitFor(() => expect(api.calls).toContain("POST /api/v1/inbox/item-1/read"));
+  it("does not mark a read message again", async () => {
+    const api = fakeApi({ "/api/v1/inbox/3": inboxMessage({ read: true, readAt: "2026-11-15T12:00:00Z" }) });
+    renderAt("/inbox/3", api);
+    await screen.findByRole("article", { name: "Message #3" });
+    expect(api.calls.filter((c) => c.startsWith("POST"))).toEqual([]);
+  });
+
+  it("offers only the actions of the references a message has", async () => {
+    const cases: [Record<string, unknown>, string[], string[]][] = [
+      [{ artifact: null, artifactId: null }, ["View application", "View delivery", "View build"], ["Download logs ↗"]],
+      [{ delivery: null, deliveryRunId: null, deliveryStepId: null }, ["View application", "View build", "Download logs ↗"], ["View delivery"]],
+      [{ build: null, buildId: null }, ["View application", "View delivery", "Download logs ↗"], ["View build"]],
+      [
+        { application: null, applicationId: null, delivery: null, deliveryRunId: null, build: null, buildId: null, artifact: null, artifactId: null },
+        [],
+        ["View application", "View delivery", "View build", "Download logs ↗"],
+      ],
+    ];
+    for (const [over, present, absent] of cases) {
+      const { unmount } = renderAt("/inbox/3", fakeApi({ "/api/v1/inbox/3": inboxMessage({ ...over, read: true }) }));
+      const msg = await screen.findByRole("article", { name: "Message #3" });
+      for (const name of present) expect(within(msg).getByRole("link", { name })).toBeInTheDocument();
+      for (const name of absent) expect(within(msg).queryByRole("link", { name })).not.toBeInTheDocument();
+      if (over.delivery === null) expect(msg).not.toHaveTextContent("Revision");
+      unmount();
+    }
+  });
+
+  it("asks for nothing but a message number", async () => {
+    const api = fakeApi({});
+    renderAt("/inbox/77777777-7777-4777-8777-777777777773", api);
+    await waitFor(() => expect(api.calls).toContain("/api/v1/inbox/0"));
+    expect(api.calls.filter((c) => c.includes("77777777"))).toEqual([]);
   });
 
   it("shows an empty Inbox", async () => {
-    renderAt("/inbox", fakeApi({ "/api/v1/inbox": { items: [], unread: 0 } }));
+    renderAt("/inbox", fakeApi({ "/api/v1/inbox": { messages: [], unread: 0 } }));
     expect(await screen.findByText("Nothing here yet.")).toBeInTheDocument();
   });
 });

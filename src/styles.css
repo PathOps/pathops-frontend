@@ -338,7 +338,26 @@ header .inbox-link {
   font-weight: bold;
   text-align: center;
 }
-/* Unread Inbox items stand out; read ones are plain. */
+/* The Inbox lists messages like a mail inbox: unread ones in bold with a
+   dot; a row opens its message. */
+table.inbox tbody tr {
+  cursor: pointer;
+}
+table.inbox tbody tr:hover {
+  background: var(--selected);
+}
+table.inbox .number {
+  width: 4em;
+  white-space: nowrap;
+}
+table.inbox .received {
+  white-space: nowrap;
+  text-align: right;
+}
+table.inbox .item-title {
+  color: var(--fg);
+  text-decoration: none;
+}
 tr.unread .item-title {
   font-weight: bold;
 }
@@ -354,9 +373,26 @@ tr.read .item-title {
   background: var(--link);
   vertical-align: middle;
 }
-td.actions {
-  white-space: nowrap;
+/* A message: its text as paragraphs, then its actions, which look like the
+   UI's buttons. */
+.message h1 {
+  margin-top: 4px;
 }
-td.actions > * + * {
-  margin-left: 10px;
+.message-body {
+  max-width: 65ch;
+  margin: 16px 0 24px;
+}
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.message-actions a {
+  background: var(--button);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 3px 10px;
+  text-decoration: none;
 }
