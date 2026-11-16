@@ -1,7 +1,7 @@
 {
   "name": "pathops-frontend",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.8.1",
   "type": "module",
   "description": "The PathOps Application UI: a read-only view of a Cell's Applications, served as static files.",
   "license": "MIT",
@@ -16,7 +16,7 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-router-dom": "6.28.0",
-    "socket.io-client": "4.8.1"
+    "socket.io-client": "4.8.4"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.0",

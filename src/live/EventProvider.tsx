@@ -69,8 +69,9 @@ export const browserSource: LiveSource = {
     }
   },
   open(base, auth) {
+    // Socket.IO's default transports: long-polling first, upgraded to
+    // WebSocket when it can be (Decision 0063).
     const s = io(base, {
-      transports: ["websocket"],
       auth,
       reconnectionDelay: 1_000,
       reconnectionDelayMax: 10_000,

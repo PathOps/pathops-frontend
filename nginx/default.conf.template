@@ -2,8 +2,8 @@
 # /api, /.well-known and /healthz never reach this server (the Cell routes
 # them to the Tenant CP at the same origin). PATHOPS_DEX_ORIGIN and
 # PATHOPS_EVENTS_ORIGIN are the only other origins the page talks to (its
-# OIDC sign-in, Decision 0060; its live updates, Decision 0063, a Socket.IO
-# WebSocket at wss:// of the same host).
+# OIDC sign-in, Decision 0060; its live updates, Decision 0063: Socket.IO's
+# HTTPS long-polling and its WebSocket upgrade at wss:// of the same host).
 map "${PATHOPS_EVENTS_ORIGIN}" $pathops_events_ws {
     "~^https://(?<events_host>[^/]+)$" "wss://$events_host";
     default "";
