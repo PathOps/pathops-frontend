@@ -1,6 +1,5 @@
 import { createContext, useContext } from "react";
 import { accessToken, authorizationUrl, loadConfig, signOut } from "../auth/oidc";
-import { liveSignInFirst } from "../live/EventProvider";
 
 // ApiError is a non-2xx answer of the Tenant CP: its status and error code
 // ("not_found", "tekton_unavailable", ...).
@@ -27,10 +26,7 @@ export interface Api {
 // The page being left (no token yet) is replaced, not kept in the history:
 // with the callback's own replace, a sign-in (a reload included) adds no
 // entry, so Back leaves the page instead of signing in to it again.
-// pathops-events' session comes first when it is missing (liveSignInFirst):
-// one sign-in, never a second one once the UI is up.
 export async function signIn(): Promise<never> {
-  if (await liveSignInFirst()) throw new SigningIn();
   const url = await authorizationUrl(await loadConfig(), window.location.pathname + window.location.search);
   window.location.replace(url);
   throw new SigningIn();

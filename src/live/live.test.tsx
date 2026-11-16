@@ -1,66 +1,101 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ApiContext, type Api } from "../api/client";
 import { AppRoutes } from "../App";
 import { fakeApi } from "../test/render";
 import * as f from "../test/fixtures";
-import { EventProvider, type Connection, type LiveSource } from "./EventProvider";
+import { EventProvider, type Auth, type LiveSocket, type LiveSource } from "./EventProvider";
 import type { LiveEvent } from "./topics";
 
 const EVENTS = "https://events-canary.demo.pathops.io";
 const app = `/api/v1/applications/${f.appId}`;
 const otherApp = "22222222-2222-4222-8222-222222222222";
 
-// conn is a fake EventSource the test drives.
-class FakeConnection implements Connection {
-  readyState = 0;
-  onopen: ((ev: Event) => unknown) | null = null;
-  onmessage: ((ev: MessageEvent) => unknown) | null = null;
-  onerror: ((ev: Event) => unknown) | null = null;
+// FakeSocket is a socket.io-client socket the test drives.
+class FakeSocket implements LiveSocket {
+  active = true;
   closed = false;
-  constructor(public url: string) {}
-  close() {
+  connects = 0;
+  tokens: string[] = [];
+  reauths: { token: string; ack: (a: { ok?: boolean; error?: string }) => void }[] = [];
+  private handlers = new Map<string, ((...a: never[]) => void)[]>();
+  private reconnecting: (() => void)[] = [];
+  constructor(
+    public base: string,
+    public auth: Auth,
+  ) {}
+  on(event: string, fn: (...a: never[]) => void) {
+    this.handlers.set(event, [...(this.handlers.get(event) ?? []), fn]);
+  }
+  onReconnecting(fn: () => void) {
+    this.reconnecting.push(fn);
+  }
+  emit(_event: "reauth", data: { token: string }, ack: (a: { ok?: boolean; error?: string }) => void) {
+    this.reauths.push({ token: data.token, ack });
+  }
+  connect() {
+    this.active = true;
+    this.connects++;
+  }
+  disconnect() {
+    this.active = false;
     this.closed = true;
-    this.readyState = 2;
+    this.fire("disconnect", "io client disconnect");
   }
-  open() {
-    this.readyState = 1;
-    this.onopen?.(new Event("open"));
+  private fire(event: string, ...args: unknown[]) {
+    (this.handlers.get(event) ?? []).forEach((h) => (h as (...a: unknown[]) => void)(...args));
   }
-  send(e: LiveEvent | string) {
-    this.onmessage?.(new MessageEvent("message", { data: typeof e === "string" ? e : JSON.stringify(e) }));
+  // open: the handshake (with the auth's token) succeeds.
+  async open() {
+    const token = await new Promise<string>((r) => this.auth((d) => r(d.token)));
+    this.tokens.push(token);
+    this.fire("connect");
   }
-  // drop: the stream ended; EventSource reconnects by itself.
+  send(data: unknown) {
+    this.fire("invalidate", data);
+  }
+  // drop: the transport closed; Socket.IO reconnects by itself.
   drop() {
-    this.readyState = 0;
-    this.onerror?.(new Event("error"));
+    this.fire("disconnect", "transport close");
+    this.reconnecting.forEach((f) => f());
   }
-  // refuse: an HTTP error; EventSource gives up.
-  refuse() {
-    this.readyState = 2;
-    this.onerror?.(new Event("error"));
+  // refuse: pathops-events refused the handshake; Socket.IO does not retry.
+  refuse(message = "unauthorized") {
+    this.active = false;
+    this.fire("connect_error", new Error(message));
   }
 }
 
-function fakeSource(signed: boolean | null = true) {
+function fakeSource() {
+  let signedIn: ((s: boolean) => void)[] = [];
   const s = {
-    conns: [] as FakeConnection[],
-    signIns: [] as string[],
-    signed,
+    socks: [] as FakeSocket[],
+    current: "token-1" as string | null,
+    exp: Date.now() + 5 * 60_000 as number | null,
     async base() {
-      return EVENTS;
+      return EVENTS as string | null;
     },
-    open(url: string) {
-      const c = new FakeConnection(url);
-      s.conns.push(c);
+    open(base: string, auth: Auth) {
+      const c = new FakeSocket(base, auth);
+      s.socks.push(c);
       return c;
     },
-    async signedIn() {
-      return s.signed;
+    async token() {
+      return s.current;
     },
-    signIn(base: string) {
-      s.signIns.push(base);
+    expiry() {
+      return s.exp;
+    },
+    onSignedIn(l: (signed: boolean) => void) {
+      signedIn.push(l);
+      return () => {
+        signedIn = signedIn.filter((x) => x !== l);
+      };
+    },
+    signIn(signed: boolean) {
+      s.current = signed ? "token-2" : null;
+      signedIn.forEach((l) => l(signed));
     },
   };
   return s satisfies LiveSource & Record<string, unknown>;
@@ -87,11 +122,11 @@ const ev = (type: LiveEvent["type"], applicationId: string, resourceId?: string)
 
 const count = (api: { calls: string[] }, path: string) => api.calls.filter((c) => c === path).length;
 
-// connected opens the one stream once the page is up.
+// connected opens the one connection once the page is up.
 async function connected(source: ReturnType<typeof fakeSource>) {
-  await waitFor(() => expect(source.conns.length).toBe(1));
-  act(() => source.conns[0].open());
-  return source.conns[0];
+  await waitFor(() => expect(source.socks.length).toBe(1));
+  await act(() => source.socks[0].open());
+  return source.socks[0];
 }
 
 function table() {
@@ -114,15 +149,17 @@ beforeEach(() => sessionStorage.clear());
 afterEach(() => sessionStorage.clear());
 
 describe("Live updates", () => {
-  it("opens one stream for the whole UI, with credentials, to pathops-events", async () => {
+  it("opens one Socket.IO connection for the whole UI to pathops-events' host, with the PathOps token in its auth", async () => {
     const source = fakeSource();
     const api = fakeApi(table());
     renderLive(`/applications/${f.appId}/builds`, api, source);
     await screen.findAllByRole("link", { name: "#2" });
-    await connected(source);
-    // The header, the overview and the Builds list all listen; one stream.
-    expect(source.conns).toHaveLength(1);
-    expect(source.conns[0].url).toBe(`${EVENTS}/api/v1/events`);
+    const c = await connected(source);
+    // The header, the overview and the Builds list all listen; one connection.
+    expect(source.socks).toHaveLength(1);
+    expect(c.base).toBe(EVENTS);
+    expect(c.tokens).toEqual(["token-1"]);
+    expect(document.cookie).toBe("");
   });
 
   it("refetches the Builds list for its Application only; other Applications and types are ignored", async () => {
@@ -293,13 +330,14 @@ describe("Live updates", () => {
     await screen.findAllByRole("link", { name: "#2" });
     const c = await connected(source);
     const before = api.calls.length;
-    act(() => c.send("not json"));
-    act(() => c.send(JSON.stringify({ type: "BUILD_CHANGED" })));
-    act(() => c.send(JSON.stringify({ type: "APPLICATION_DELETED", applicationId: f.appId, occurredAt: "x" })));
+    act(() => c.send("not an object"));
+    act(() => c.send(JSON.stringify(ev("BUILD_CHANGED", f.appId, "build-ok"))));
+    act(() => c.send({ type: "BUILD_CHANGED" }));
+    act(() => c.send({ type: "APPLICATION_DELETED", applicationId: f.appId, occurredAt: "x" }));
     expect(api.calls.length).toBe(before);
   });
 
-  it("a dropped stream shows Reconnecting…; once back, every live view reads REST again", async () => {
+  it("a dropped connection shows Reconnecting…; Socket.IO reconnects it with the current token and every live view reads REST again", async () => {
     const source = fakeSource();
     const api = fakeApi(table());
     renderLive(`/applications/${f.appId}/builds`, api, source);
@@ -309,54 +347,91 @@ describe("Live updates", () => {
     expect(await screen.findByText("Reconnecting…")).toBeInTheDocument();
     const builds = count(api, `${app}/builds`);
     const badge = count(api, "/api/v1/inbox?unread=true&limit=1");
-    act(() => c.open());
+    source.current = "token-renewed";
+    await act(() => c.open());
     await waitFor(() => expect(screen.queryByText("Reconnecting…")).not.toBeInTheDocument());
     await waitFor(() => expect(count(api, `${app}/builds`)).toBe(builds + 1));
     expect(count(api, "/api/v1/inbox?unread=true&limit=1")).toBe(badge + 1);
-    // Still one stream: EventSource reconnected it.
-    expect(source.conns).toHaveLength(1);
+    // Still one connection, now with the current token.
+    expect(source.socks).toHaveLength(1);
+    expect(c.tokens).toEqual(["token-1", "token-renewed"]);
   });
 
-  it("a refused stream (pathops-events restarting) is opened again after a backoff", async () => {
-    const source = fakeSource(null);
+  it("a refusal (pathops-events restarting) is retried after a backoff, without any sign-in", async () => {
+    const source = fakeSource();
     const api = fakeApi(table());
     renderLive(`/applications/${f.appId}/builds`, api, source);
     await screen.findAllByRole("link", { name: "#2" });
     const c = await connected(source);
-    act(() => c.refuse());
+    act(() => c.drop());
+    act(() => c.refuse("unavailable"));
     expect(await screen.findByText("Reconnecting…")).toBeInTheDocument();
-    await waitFor(() => expect(source.conns).toHaveLength(2));
-    expect(c.closed).toBe(true);
-    act(() => source.conns[1].open());
+    await waitFor(() => expect(c.connects).toBe(1));
+    await act(() => c.open());
     await waitFor(() => expect(screen.queryByText("Reconnecting…")).not.toBeInTheDocument());
-    expect(source.signIns).toHaveLength(0);
+    expect(source.socks).toHaveLength(1);
   });
 
-  it("without a session at pathops-events it signs in there once, then shows Live updates disconnected", async () => {
-    const source = fakeSource(false);
+  it("a token pathops-events keeps refusing ends in Live updates disconnected, never in a sign-in loop", async () => {
+    const source = fakeSource();
     const api = fakeApi(table());
     renderLive(`/applications/${f.appId}/builds`, api, source);
     await screen.findAllByRole("link", { name: "#2" });
-    await waitFor(() => expect(source.conns).toHaveLength(1));
-    act(() => source.conns[0].refuse());
-    await waitFor(() => expect(source.signIns).toEqual([EVENTS]));
-    // Back from that sign-in, still refused (a loop is never started).
-    const again = fakeSource(false);
-    const { unmount } = renderLive(`/applications/${f.appId}/builds`, fakeApi(table()), again);
-    await waitFor(() => expect(again.conns).toHaveLength(1));
-    act(() => again.conns[0].refuse());
+    await waitFor(() => expect(source.socks).toHaveLength(1));
+    const c = source.socks[0];
+    for (let i = 1; i <= 4; i++) {
+      act(() => c.refuse("unauthorized"));
+      if (i < 4) await waitFor(() => expect(c.connects).toBe(i));
+    }
     expect(await screen.findByText("Live updates disconnected")).toBeInTheDocument();
-    expect(again.signIns).toHaveLength(0);
-    unmount();
+    expect(source.socks).toHaveLength(1);
   });
 
-  it("a Cell without pathops-events has no stream and no note", async () => {
+  it("hands pathops-events the renewed token before the current one expires", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const source = fakeSource();
+      source.exp = Date.now() + 60_000;
+      renderLive(`/applications/${f.appId}/builds`, fakeApi(table()), source);
+      const c = await connected(source);
+      source.current = "token-renewed";
+      source.exp = Date.now() + 5 * 60_000;
+      await act(() => vi.advanceTimersByTimeAsync(41_000));
+      await waitFor(() => expect(c.reauths.map((r) => r.token)).toEqual(["token-renewed"]));
+      act(() => c.reauths[0].ack({ ok: true }));
+      // The next one is scheduled from the new token's expiry.
+      await act(() => vi.advanceTimersByTimeAsync(60_000));
+      expect(c.reauths).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a sign-out closes the connection and nothing reopens it without a token; a sign-in opens it with the new token", async () => {
+    const source = fakeSource();
+    const api = fakeApi(table());
+    renderLive(`/applications/${f.appId}/builds`, api, source);
+    await screen.findAllByRole("link", { name: "#2" });
+    const c = await connected(source);
+    act(() => source.signIn(false));
+    expect(c.closed).toBe(true);
+    expect(c.active).toBe(false);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(c.connects).toBe(0);
+    expect(screen.queryByText(/Reconnecting|disconnected/)).not.toBeInTheDocument();
+    act(() => source.signIn(true));
+    expect(c.connects).toBe(1);
+    await act(() => c.open());
+    expect(c.tokens).toEqual(["token-1", "token-2"]);
+  });
+
+  it("a Cell without pathops-events has no connection and no note", async () => {
     const source = { ...fakeSource(), base: async () => null };
     const api = fakeApi(table());
     renderLive(`/applications/${f.appId}/builds`, api, source);
     const header = await screen.findByRole("banner");
     await screen.findAllByRole("link", { name: "#2" });
-    expect(source.conns).toHaveLength(0);
+    expect(source.socks).toHaveLength(0);
     expect(within(header).queryByText(/Reconnecting|disconnected/)).not.toBeInTheDocument();
   });
 });

@@ -350,7 +350,7 @@ describe("Header", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("signs out from the user's menu: pathops-events' session, then Dex's logout, which returns to the signed-out page", async () => {
+  it("signs out from the user's menu: Dex's logout, which returns to the signed-out page; nothing asked of pathops-events", async () => {
     const replace = vi.fn();
     const requests: [string, RequestInit | undefined][] = [];
     vi.stubGlobal("location", { origin: window.location.origin, pathname: "/applications", search: "", replace });
@@ -381,8 +381,8 @@ describe("Header", () => {
       expect(to.searchParams.get("id_token_hint")).toBe("id-1");
       expect(to.searchParams.get("post_logout_redirect_uri")).toBe(window.location.origin + "/signed-out");
       expect(signedIn()).toBe(false);
-      const logout = requests.find(([u]) => u === "https://events.example/logout");
-      expect(logout?.[1]).toMatchObject({ method: "POST", credentials: "include", keepalive: true });
+      // pathops-events has no session of its own to end.
+      expect(requests.some(([u]) => u.startsWith("https://events.example"))).toBe(false);
     } finally {
       vi.unstubAllGlobals();
       resetForTests();

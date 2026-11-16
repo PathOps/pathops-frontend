@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import type { Inbox, Me } from "../api/types";
 import { useResource } from "../api/useResource";
 import { endSession } from "../auth/oidc";
-import { endLiveSession, LiveNote } from "../live/EventProvider";
+import { LiveNote } from "../live/EventProvider";
 import { inbox as inboxTopic } from "../live/topics";
 
 const themeKey = "pathops-theme";
@@ -154,10 +154,10 @@ export function Page({ crumbs, inbox, children }: { crumbs?: ReactNode; inbox?: 
         <UserMenu
           who={who}
           onSignOut={() => {
-            // This page's tokens go first; then pathops-events' session and
-            // the Cell's login session at Dex, which returns to /signed-out.
-            const next = endSession();
-            void Promise.all([next, endLiveSession()]).then(([to]) => window.location.replace(to));
+            // This page's tokens go first (the live connection closes with
+            // them); then the Cell's login session at Dex, which returns to
+            // /signed-out.
+            void endSession().then((to) => window.location.replace(to));
           }}
         />
       </header>

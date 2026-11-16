@@ -8,9 +8,11 @@ import {
   completeSignIn,
   endSession,
   loadConfig,
+  onSignedIn,
   resetForTests,
   safeReturn,
   signedIn,
+  tokenExpiry,
 } from "./oidc";
 
 const issuer = "https://dex-test.example";
@@ -201,5 +203,27 @@ describe("sign-out", () => {
       expect(await endSession(f)).toBe("/signed-out");
       expect(signedIn()).toBe(false);
     }
+  });
+});
+
+// The live connection follows the page's sign-in: told when it signs in and
+// when it signs out, with the token's expiry to renew it in time.
+describe("sign-in listeners", () => {
+  it("tell a sign-in and a sign-out once each; the expiry is the token's", async () => {
+    const f = discoveryFetch((url) =>
+      url === issuer + "/token" ? Response.json({ access_token: "at-1", token_type: "Bearer", expires_in: 300 }) : undefined,
+    );
+    const seen: boolean[] = [];
+    const off = onSignedIn((s) => seen.push(s));
+    expect(tokenExpiry()).toBeNull();
+    await authorizationUrl(await loadConfig(f), "/");
+    const { state } = JSON.parse(sessionStorage.getItem("pathops.oidc.pending")!);
+    const before = Date.now();
+    await completeSignIn(`?code=c&state=${state}`, f);
+    expect(tokenExpiry()).toBeGreaterThanOrEqual(before + 299_000);
+    void endSession(f);
+    void endSession(f);
+    expect(seen).toEqual([true, false]);
+    off();
   });
 });

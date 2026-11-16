@@ -49,6 +49,28 @@ interface Pending {
 let config: OidcConfig | null = null;
 let tokens: Tokens | null = null;
 let refreshing: Promise<string> | null = null;
+// Listeners of sign-in and sign-out (the live connection follows them).
+const signedInListeners = new Set<(signedIn: boolean) => void>();
+
+function setTokens(t: Tokens | null) {
+  const was = tokens !== null;
+  tokens = t;
+  if (was !== (t !== null)) signedInListeners.forEach((l) => l(t !== null));
+}
+
+// onSignedIn calls listener with true when the page signs in and false when
+// it signs out; it returns the unsubscribe.
+export function onSignedIn(listener: (signedIn: boolean) => void): () => void {
+  signedInListeners.add(listener);
+  return () => {
+    signedInListeners.delete(listener);
+  };
+}
+
+// tokenExpiry is when the current access token expires (ms), null without one.
+export function tokenExpiry(): number | null {
+  return tokens?.expiresAt ?? null;
+}
 
 export class AuthError extends Error {}
 
@@ -172,11 +194,12 @@ export async function completeSignIn(search: string, fetchFn: typeof fetch = fet
   const code = q.get("code");
   if (!code || q.get("state") !== pending.state) throw new AuthError("the sign-in answer does not match its request");
   const cfg = await loadConfig(fetchFn);
-  tokens = await tokenRequest(
+  const t = await tokenRequest(
     cfg,
     { grant_type: "authorization_code", code, redirect_uri: redirectUri(), code_verifier: pending.verifier },
     fetchFn,
   );
+  setTokens(t);
   return pending.returnTo;
 }
 
@@ -186,7 +209,7 @@ export async function accessToken(fetchFn: typeof fetch = fetch): Promise<string
   if (!tokens) return null;
   if (Date.now() < tokens.expiresAt - EXPIRY_MARGIN_MS) return tokens.accessToken;
   if (!tokens.refreshToken) {
-    tokens = null;
+    setTokens(null);
     return null;
   }
   if (!refreshing) {
@@ -206,14 +229,14 @@ export async function accessToken(fetchFn: typeof fetch = fetch): Promise<string
   try {
     return await refreshing;
   } catch {
-    tokens = null;
+    setTokens(null);
     return null;
   }
 }
 
 // signOut drops this page's tokens (the UI's own session).
 export function signOut(): void {
-  tokens = null;
+  setTokens(null);
 }
 
 // endSession signs this page out at once and returns where the browser goes
@@ -243,5 +266,6 @@ export function resetForTests(): void {
   config = null;
   tokens = null;
   refreshing = null;
+  signedInListeners.clear();
   sessionStorage.clear();
 }

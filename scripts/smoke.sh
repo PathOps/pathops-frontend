@@ -27,7 +27,7 @@ fail() {
 base=http://127.0.0.1:$PORT
 page=$(curl -sS -D "$H" "$base/applications/x/deliveries/y")
 grep -q "<title>PathOps</title>" <<<"$page" || fail "a client route is not the SPA"
-grep -qi "^content-security-policy: default-src 'self'; connect-src 'self' https://dex-smoke.example https://events-smoke.example;" "$H" \
+grep -qi "^content-security-policy: default-src 'self'; connect-src 'self' https://dex-smoke.example https://events-smoke.example wss://events-smoke.example;" "$H" \
   || fail "no CSP for the Dex and pathops-events origins"
 grep -qi "^x-frame-options: DENY" "$H" || fail "no X-Frame-Options"
 grep -qi "^cache-control: no-cache" "$H" || fail "index.html is cached"

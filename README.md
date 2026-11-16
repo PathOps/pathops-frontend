@@ -38,11 +38,11 @@ Forgejo), without a password. Only the PKCE verifier, state and return path
 cross the redirect, in `sessionStorage`.
 
 **Sign out** (the user's menu) means the same as `pathops logout`: the page's
-tokens are dropped first, then pathops-events' session ends and the browser
-goes to Dex's `end_session_endpoint` (RP-Initiated Logout) with the session's
-ID token as `id_token_hint`. Dex ends the Cell's login session (the one
-Forgejo, the Artifact Store and pathops-events sign in with; Dex asks to
-confirm when the hint is not its current session) and returns to
+tokens are dropped first (the live connection closes with them), then the
+browser goes to Dex's `end_session_endpoint` (RP-Initiated Logout) with the
+session's ID token as `id_token_hint`. Dex ends the Cell's login session (the
+one Forgejo and the Artifact Store sign in with; Dex asks to confirm when the
+hint is not its current session) and returns to
 `/signed-out` ("You are signed out." and Sign in again), the only
 `post_logout_redirect_uri` the core registers.
 
@@ -116,9 +116,13 @@ signed in to it.
 
 ## Live updates
 
-Decision 0063: the signed-in UI holds one Server-Sent Events stream
-(`EventProvider`, `src/live/`) to the Cell's pathops-events (its URL from the
-Tenant Control Plane's discovery, `events.url`), whatever views are open. An
+Decision 0063: the signed-in UI holds one Socket.IO connection
+(`socket.io-client`, WebSocket only; `EventProvider`, `src/live/`) to the
+Cell's pathops-events at its own host (its URL from the Tenant Control Plane's
+discovery, `events.url`), whatever views are open. It is authenticated by the
+PathOps token the UI already holds for the Tenant CP, in the handshake's auth
+payload: there is no sign-in, session or cookie of pathops-events, and the
+token is never in a URL. An
 event is only an invalidation (`BUILD_CHANGED`, `DELIVERY_CHANGED`,
 `INBOX_CHANGED`, `APPLICATION_CHANGED`, with the Application and the
 resource's id, none for the Application itself): a view whose
@@ -135,14 +139,15 @@ ignores it. The Topics are in one place (`src/live/topics.ts`):
 | Applications | any Application (`APPLICATION_CHANGED`: a new one, its provisioning) and any DeliveryRun |
 | Inbox, the header's unread count | `INBOX_CHANGED` (an older Inbox page: its own messages) |
 
-Those views have no Refresh, and none is polled but for what follows. A dropped stream reconnects
-(EventSource), a refused one is opened again after a backoff; after any
-reconnection every live view reads REST again (nothing is replayed). Without
-a session at pathops-events the browser signs in there once (its Dex client,
-`pathops-events-web`; Dex's login session answers) and comes back to the same
-page: before the UI's own sign-in when the UI starts one, so a person signs in
-once and the signed-in UI never leaves (its tokens live in memory) to sign in
-again. What no invalidation reports is still read again every 5 s while it
+Those views have no Refresh, and none is polled but for what follows. A dropped
+connection reconnects (Socket.IO, with the current token), a refused one is
+tried again after a backoff, and a token refused four times in a row ends in
+"Live updates disconnected" (never a sign-in); after any reconnection every
+live view reads REST again (nothing is replayed). Socket.IO's ping/pong is the
+only heartbeat. 20 s before the token expires the UI renews it and hands it
+over (`reauth`); otherwise pathops-events closes the connection at its expiry
+and it reconnects with the current one. A sign-out closes it, and nothing
+reopens it without a token. What no invalidation reports is still read again every 5 s while it
 runs: Tekton's progress inside a running build (TaskRuns, steps). No view has
 a Refresh.
 
