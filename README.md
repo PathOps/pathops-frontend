@@ -117,7 +117,8 @@ signed in to it.
 ## Live updates
 
 Decision 0063: the signed-in UI holds one Socket.IO connection
-(`socket.io-client`, WebSocket only; `EventProvider`, `src/live/`) to the
+(the official `socket.io-client` with Socket.IO's default transports:
+long-polling, upgraded to WebSocket; `EventProvider`, `src/live/`) to the
 Cell's pathops-events at its own host (its URL from the Tenant Control Plane's
 discovery, `events.url`), whatever views are open. It is authenticated by the
 PathOps token the UI already holds for the Tenant CP, in the handshake's auth
