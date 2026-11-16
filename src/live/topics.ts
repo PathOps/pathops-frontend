@@ -27,11 +27,6 @@ export function resource(type: "BUILD_CHANGED" | "DELIVERY_CHANGED", id: string)
   return (e) => e.type === type && e.resourceId === id;
 }
 
-// The Builds of one Application (its images: a succeeded build adds one).
-export function builds(appId: string): Topic {
-  return (e) => e.type === "BUILD_CHANGED" && e.applicationId === appId;
-}
-
 // The DeliveryRuns of one Application (its overview: every build change
 // changes its run too, so one type is enough).
 export function deliveries(appId: string): Topic {

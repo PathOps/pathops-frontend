@@ -1,11 +1,16 @@
-import type { ImageEntry } from "../api/types";
-import { useResource } from "../api/useResource";
-import { BuildLink, CopyButton, Loaded, Short, Time } from "../components/ui";
-import { builds } from "../live/topics";
+import type { ImageEntry, Paged } from "../api/types";
+import { useResource, type Resource } from "../api/useResource";
+import { BuildLink, CopyButton, Loaded, Pager, Short, Time, usePageCursor, withCursor } from "../components/ui";
+import { applicationList } from "../live/topics";
 
-// Images: a succeeded build adds one (live: the Application's builds).
+// Images: 10 per page, newest first, paged by the Tenant CP (?cursor=); live
+// (a succeeded build adds one to the newest page; an older page changes only
+// with its own builds).
 export function Images({ appId }: { appId: string }) {
-  const r = useResource<{ images: ImageEntry[] }>(`/api/v1/applications/${appId}/images`, { live: builds(appId) });
+  const cursor = usePageCursor();
+  const r: Resource<Paged & { images: ImageEntry[] }> = useResource(withCursor(`/api/v1/applications/${appId}/images`, cursor), {
+    live: (e) => applicationList("BUILD_CHANGED", appId, !r.data?.previousCursor, r.data?.images.map((i) => i.buildId) ?? [])(e),
+  });
   return (
     <>
       <h2>Images</h2>
@@ -44,6 +49,7 @@ export function Images({ appId }: { appId: string }) {
                 </tbody>
               </table>
             </div>
+            <Pager label="Image pages" newer={d.previousCursor} older={d.nextCursor} />
             {/* Registry metadata (size, manifests) arrives with a read-only
                 registry identity of the Tenant CP; nothing is invented until then. */}
           </>

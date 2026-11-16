@@ -53,8 +53,8 @@ discreet note precedes the navigation: **Reconnecting…**, or **Live updates
 disconnected** (a reload is the fallback).
 
 Long lists are paged by the Tenant Control Plane (keyset cursors), never cut
-in the browser: the Inbox 25 a page (**Newer** / **Older**), Delivery Runs
-and Builds 10 a page (**Previous** / **Next**), newest first. The page is
+in the browser: the Inbox 25 a page (**Newer** / **Older**), Delivery Runs,
+Builds and Images 10 a page (**Previous** / **Next**), newest first. The page is
 `?cursor=` in the URL, so a refresh, a copied link and Back keep it; an end
 of the list shows its control disabled, a list of one page none.
 
@@ -117,10 +117,10 @@ ignores it. The Topics are in one place (`src/live/topics.ts`):
 
 | View | Reads again on |
 |---|---|
-| Builds / Delivery Runs (newest page) | that type, of its Application |
-| Builds / Delivery Runs (an older page) | that type, for a row on the page (a new one never moves the page) |
+| Builds / Delivery Runs / Images (newest page) | that type (an image: `BUILD_CHANGED`), of its Application |
+| Builds / Delivery Runs / Images (an older page) | that type, for a row on the page (a new one never moves the page) |
 | Build, Delivery run | that Build's / DeliveryRun's id |
-| Application overview, Images | its Application's DeliveryRuns / Builds |
+| Application overview | its Application's DeliveryRuns |
 | Applications | any DeliveryRun (new Applications and provisioning: Refresh) |
 | Inbox, the header's unread count | `INBOX_CHANGED` (an older Inbox page: its own messages) |
 

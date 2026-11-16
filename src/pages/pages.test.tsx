@@ -651,6 +651,35 @@ describe("Pagination", () => {
   });
 });
 
+describe("Image pagination", () => {
+  const imgs = (from: number, to: number) => {
+    const out = [];
+    for (let n = from; n >= to; n--) out.push({ ...f.images.images[0], buildId: `build-${n}`, buildNumber: n, digest: `sha256:${String(n).padStart(64, "0")}` });
+    return out;
+  };
+
+  it("pages Images 10 at a time from the Tenant CP: Previous and Next", async () => {
+    const api = fakeApi({
+      ...all,
+      [`${app}/images`]: { images: imgs(30, 21), nextCursor: "i-21", previousCursor: null },
+      [`${app}/images?cursor=i-21`]: { images: imgs(20, 11), nextCursor: "i-11", previousCursor: "i-20" },
+    });
+    renderAt(`/applications/${f.appId}/images`, api);
+    const pager = await screen.findByRole("navigation", { name: "Image pages" });
+    expect(screen.getByRole("region", { name: "Images" }).querySelectorAll("tbody tr")).toHaveLength(10);
+    expect(within(pager).getByText("← Previous")).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(within(pager).getByRole("link", { name: "Next →" }));
+    await waitFor(() => expect(api.calls).toContain(`${app}/images?cursor=i-21`));
+    await waitFor(() =>
+      expect(within(screen.getByRole("navigation", { name: "Image pages" })).getByRole("link", { name: "← Previous" })).toHaveAttribute(
+        "href",
+        `/applications/${f.appId}/images?cursor=i-20`,
+      ),
+    );
+    expect(screen.getByRole("link", { name: "#20" })).toBeInTheDocument();
+  });
+});
+
 describe("Breadcrumb", () => {
   it("is PathOps / Inbox on the Inbox's pages, PathOps / Applications on the Applications'", async () => {
     const { unmount } = renderAt("/inbox/3", fakeApi({ "/api/v1/inbox/3": inboxMessage({ read: true }) }));

@@ -169,6 +169,24 @@ describe("Live updates", () => {
     expect(count(api, `${app}/builds`)).toBe(0);
   });
 
+  it("Images: the newest page shows a new image; an older page only its own builds' changes", async () => {
+    const source = fakeSource();
+    const t = table();
+    t[`${app}/images`] = { ...f.images, previousCursor: null, nextCursor: null };
+    t[`${app}/images?cursor=older`] = { ...f.images, previousCursor: "newer", nextCursor: null };
+    const api = fakeApi(t);
+    renderLive(`/applications/${f.appId}/images?cursor=older`, api, source);
+    await screen.findByRole("navigation", { name: "Image pages" });
+    const c = await connected(source);
+    const page = `${app}/images?cursor=older`;
+    const before = count(api, page);
+    act(() => c.send(ev("BUILD_CHANGED", f.appId, "build-new")));
+    expect(count(api, page)).toBe(before);
+    act(() => c.send(ev("BUILD_CHANGED", f.appId, "build-ok")));
+    await waitFor(() => expect(count(api, page)).toBe(before + 1));
+    expect(count(api, `${app}/images`)).toBe(0);
+  });
+
   it("a Build's page refetches for that Build only", async () => {
     const source = fakeSource();
     const api = fakeApi(table());
