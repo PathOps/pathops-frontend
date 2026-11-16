@@ -50,6 +50,26 @@ describe("sign-in", () => {
     expect(pending.returnTo).toBe("/applications/x/builds");
   });
 
+  it("takes the Cell's pathops-events URL from discovery, an https origin only", async () => {
+    const at = (events: unknown) =>
+      discoveryFetch((url) =>
+        url === "/.well-known/pathops"
+          ? Response.json({ oidc: { issuer, clientId: "pathops-cli" }, ui: { clientId: "pathops-ui" }, events })
+          : undefined,
+      );
+    expect((await loadConfig(discoveryFetch())).eventsUrl).toBeNull();
+    for (const [events, want] of [
+      [{ url: "https://events-test.example" }, "https://events-test.example"],
+      [{ url: "http://events-test.example" }, null],
+      [{ url: "https://events-test.example/api" }, null],
+      [{ url: "javascript:alert(1)" }, null],
+      ["https://events-test.example", null],
+    ] as const) {
+      resetForTests();
+      expect((await loadConfig(at(events))).eventsUrl).toBe(want);
+    }
+  });
+
   it("refuses a Cell without a UI client", async () => {
     const f = discoveryFetch((url) =>
       url === "/.well-known/pathops" ? Response.json({ oidc: { issuer, clientId: "pathops-cli" } }) : undefined,

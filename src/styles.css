@@ -404,6 +404,13 @@ nav.main-nav a.active {
   font-weight: bold;
   background: var(--selected);
 }
+/* Live updates not flowing (Decision 0063): a discreet note before the
+   navigation; nothing while they flow. */
+.live-note {
+  color: var(--warning);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
 .user-menu {
   position: relative;
 }

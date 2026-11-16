@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { useParams } from "react-router-dom";
-import type { BuildDetail, DeliveryDetail, DeliveryStep } from "../api/types";
+import type { DeliveryDetail, DeliveryStep } from "../api/types";
 import { running, useResource } from "../api/useResource";
 import { Page } from "../components/Page";
 import {
@@ -11,19 +11,18 @@ import {
   Facts,
   Head12,
   Loaded,
-  RefreshButton,
   Status,
   Time,
-  Toolbar,
   humanize,
   newestFirst,
 } from "../components/ui";
-import { AppCrumbs, PipelineRunRow, TaskRunList } from "./BuildPage";
+import { resource } from "../live/topics";
+import { AppCrumbs, PipelineRunRow, TaskRunList, useBuild } from "./BuildPage";
 
 // BuildTree is a step's build as one-row summaries, one under the other:
 // the Build, its PipelineRun, its TaskRuns, their steps (each with its log).
 function BuildTree({ appId, buildId }: { appId: string; buildId: string }) {
-  const b = useResource<BuildDetail>(`/api/v1/builds/${encodeURIComponent(buildId)}`, { pollWhile: (d) => running(d.status) });
+  const b = useBuild(buildId);
   return (
     <Loaded resource={b}>
       {(d) => (
@@ -174,7 +173,7 @@ function Output({ d }: { d: DeliveryDetail }) {
 export function DeliveryPage() {
   const { appId = "", runId = "" } = useParams();
   const r = useResource<DeliveryDetail>(`/api/v1/applications/${encodeURIComponent(appId)}/deliveries/${encodeURIComponent(runId)}`, {
-    pollWhile: (d) => running(d.status),
+    live: resource("DELIVERY_CHANGED", runId),
   });
   return (
     <Page crumbs={<AppCrumbs appId={appId} section="deliveries" title="Delivery" />}>
@@ -182,7 +181,6 @@ export function DeliveryPage() {
         {(d) => (
           <>
             <h1>Delivery #{d.number}</h1>
-            <Toolbar actions={<RefreshButton resource={r} />} />
             <Facts label="Delivery run">
               <Fact label="Run ID">
                 <code>{d.id}</code>

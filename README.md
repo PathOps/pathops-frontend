@@ -37,7 +37,7 @@ reload signs in again through Dex's login session (shared with the CLI and
 Forgejo), without a password. Only the PKCE verifier, state and return path
 cross the redirect, in `sessionStorage`.
 
-## Screens (v0.6)
+## Screens (v0.7)
 
 Plain, document-like pages: bordered tables, bold colored statuses, a light
 and a dark theme (the system's, or the user's choice). Everything temporal is
@@ -48,7 +48,9 @@ The header holds the breadcrumb (PathOps / Applications / ..., or PathOps /
 Inbox / #N), the main navigation (**Applications** at `/applications`, `/`
 opens it; **Inbox** with the whole Inbox's unread count), the current one
 marked, and the signed-in user as a button whose menu switches the theme and
-signs out.
+signs out (of pathops-events too). While live updates are not flowing a
+discreet note precedes the navigation: **Reconnecting…**, or **Live updates
+disconnected** (a reload is the fallback).
 
 Long lists are paged by the Tenant Control Plane (keyset cursors), never cut
 in the browser: the Inbox 25 a page (**Newer** / **Older**), Delivery Runs
@@ -103,8 +105,33 @@ Repository links open through Forgejo's sign-in
 repository: Forgejo answers 404 for a private repository to a browser not
 signed in to it.
 
-Running deliveries and builds are read again every 5 s while they run, and
-every view has Refresh. There is no push channel yet (no SSE, no WebSocket).
+## Live updates
+
+Decision 0063: the signed-in UI holds one Server-Sent Events stream
+(`EventProvider`, `src/live/`) to the Cell's pathops-events (its URL from the
+Tenant Control Plane's discovery, `events.url`), whatever views are open. An
+event is only an invalidation (`BUILD_CHANGED`, `DELIVERY_CHANGED`,
+`INBOX_CHANGED`, with the Application and the resource's id): a view whose
+Topic it matches reads REST again (`useResource`'s `live`); every other view
+ignores it. The Topics are in one place (`src/live/topics.ts`):
+
+| View | Reads again on |
+|---|---|
+| Builds / Delivery Runs (newest page) | that type, of its Application |
+| Builds / Delivery Runs (an older page) | that type, for a row on the page (a new one never moves the page) |
+| Build, Delivery run | that Build's / DeliveryRun's id |
+| Application overview, Images | its Application's DeliveryRuns / Builds |
+| Applications | any DeliveryRun (new Applications and provisioning: Refresh) |
+| Inbox, the header's unread count | `INBOX_CHANGED` (an older Inbox page: its own messages) |
+
+Those views have no Refresh, and none is polled but for what follows. A dropped stream reconnects
+(EventSource), a refused one is opened again after a backoff; after any
+reconnection every live view reads REST again (nothing is replayed). Without
+a session at pathops-events the browser signs in there once (its Dex client,
+`pathops-events-web`; Dex's login session answers) and comes back to the same
+page. What no invalidation reports is still read again every 5 s while it
+runs: Tekton's progress inside a running build (TaskRuns, steps) and a
+provisioning Run, which keep Refresh with the Repositories.
 
 ## Image
 
@@ -115,7 +142,8 @@ ghcr.io/pathops/pathops-frontend:v<version>
 Releases are published only by the `release` workflow, from tags `v<version>`
 equal to `package.json`'s version. Pin the image by digest. The container
 listens on 8080 as a non-root user and needs `PATHOPS_DEX_ORIGIN` (the Cell's
-Dex origin, the only other origin of its Content Security Policy); with a
+Dex origin) and `PATHOPS_EVENTS_ORIGIN` (its pathops-events origin), the only
+other origins of its Content Security Policy; with a
 read-only root filesystem it needs writable `/tmp` and `/etc/nginx/conf.d`.
 
 ## Develop

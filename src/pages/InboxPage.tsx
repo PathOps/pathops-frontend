@@ -2,9 +2,10 @@ import { useEffect, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApi } from "../api/client";
 import type { Inbox, InboxMessage } from "../api/types";
-import { useResource } from "../api/useResource";
+import { useResource, type Resource } from "../api/useResource";
 import { InboxChanged, Page } from "../components/Page";
-import { Ago, ExternalLink, Fact, Facts, Loaded, Pager, RefreshButton, Toolbar, usePageCursor, withCursor } from "../components/ui";
+import { Ago, ExternalLink, Fact, Facts, Loaded, Pager, usePageCursor, withCursor } from "../components/ui";
+import * as topics from "../live/topics";
 
 // InboxPage is the owner's Inbox (Decision 0061), like a mail inbox: each
 // message's number, subject and when it arrived, newest first, 25 a page
@@ -13,14 +14,16 @@ import { Ago, ExternalLink, Fact, Facts, Loaded, Pager, RefreshButton, Toolbar, 
 // nothing technical (ids, types, deliveries, logs) is in the list.
 export function InboxPage() {
   const cursor = usePageCursor();
-  const inbox = useResource<Inbox>(withCursor("/api/v1/inbox", cursor));
+  const inbox: Resource<Inbox> = useResource(withCursor("/api/v1/inbox", cursor), {
+    live: (e) => topics.inbox(e) && (!inbox.data?.previousCursor || inbox.data.messages.some((m) => m.id === e.resourceId)),
+  });
   const navigate = useNavigate();
   return (
     <Page inbox crumbs={<> / Inbox</>}>
       <h1>Inbox</h1>
-      <Toolbar actions={<RefreshButton resource={inbox} />}>
+      <p className="muted">
         {inbox.data && (inbox.data.unread > 0 ? <strong>{inbox.data.unread} unread</strong> : "Nothing unread.")}
-      </Toolbar>
+      </p>
       <Loaded resource={inbox} empty={(d) => d.messages.length === 0}>
         {(d) => (
           <>
@@ -71,7 +74,7 @@ export function InboxPage() {
 export function InboxMessagePage() {
   const { number = "" } = useParams();
   const valid = /^[1-9][0-9]{0,17}$/.test(number);
-  const msg = useResource<InboxMessage>(`/api/v1/inbox/${valid ? number : "0"}`);
+  const msg: Resource<InboxMessage> = useResource(`/api/v1/inbox/${valid ? number : "0"}`, { live: (e) => topics.message(msg.data?.id)(e) });
   const api = useApi();
   const marked = useRef(false);
   const m = msg.data;

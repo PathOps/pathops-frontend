@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import type { BuildDetail, Log, Overview, Tasks, TaskRunView } from "../api/types";
 import { running, useResource } from "../api/useResource";
 import { Page } from "../components/Page";
+import { resource } from "../live/topics";
 import {
   Copy,
   CopyButton,
@@ -11,11 +12,9 @@ import {
   Fact,
   Facts,
   Loaded,
-  RefreshButton,
   RunLink,
   Status,
   Time,
-  Toolbar,
   newestFirst,
   seconds,
   title,
@@ -39,16 +38,25 @@ export function AppCrumbs({ appId, section, title }: { appId: string; section: s
   );
 }
 
+// useBuild is a Build and its PipelineRun: live (this build's invalidations
+// only); while it runs, Tekton's progress, which no invalidation reports, is
+// also read again every few seconds.
+export function useBuild(buildId: string) {
+  return useResource<BuildDetail>(`/api/v1/builds/${encodeURIComponent(buildId)}`, {
+    live: resource("BUILD_CHANGED", buildId),
+    pollWhile: (d) => running(d.status),
+  });
+}
+
 export function BuildPage() {
   const { appId = "", buildId = "" } = useParams();
-  const b = useResource<BuildDetail>(`/api/v1/builds/${encodeURIComponent(buildId)}`, { pollWhile: (d) => running(d.status) });
+  const b = useBuild(buildId);
   return (
     <Page crumbs={<AppCrumbs appId={appId} section="builds" title="Builds" />}>
       <Loaded resource={b}>
         {(d) => (
           <>
             <h1>Build #{d.number}</h1>
-            <Toolbar actions={<RefreshButton resource={b} />} />
             <Facts label="Build">
               <Fact label="Build ID">
                 <code>{d.id}</code>
@@ -188,7 +196,10 @@ export function PipelineRunRow({ build }: { build: BuildDetail }) {
 // step's log is open at a time, in the row under that step. As rows, each
 // TaskRun is one summary row with its steps a level in.
 export function TaskRunList({ buildId, buildRunning, rows = false }: { buildId: string; buildRunning: boolean; rows?: boolean }) {
-  const t = useResource<Tasks>(`/api/v1/builds/${encodeURIComponent(buildId)}/tasks`, { pollWhile: () => buildRunning });
+  const t = useResource<Tasks>(`/api/v1/builds/${encodeURIComponent(buildId)}/tasks`, {
+    live: resource("BUILD_CHANGED", buildId),
+    pollWhile: () => buildRunning,
+  });
   const [open, setOpen] = useState<string | null>(null);
   return (
     <Loaded resource={t}>

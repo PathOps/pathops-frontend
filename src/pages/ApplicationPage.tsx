@@ -2,7 +2,8 @@ import { NavLink, Navigate, useParams } from "react-router-dom";
 import type { Overview } from "../api/types";
 import { useResource } from "../api/useResource";
 import { Page } from "../components/Page";
-import { Copy, ExternalLink, Loaded, NotYet, RefreshButton, RunLink, Status, Toolbar } from "../components/ui";
+import { Copy, ExternalLink, Loaded, NotYet, RunLink, Status } from "../components/ui";
+import { deliveries } from "../live/topics";
 import { Builds } from "../sections/Builds";
 import { Deliveries } from "../sections/Deliveries";
 import { Images } from "../sections/Images";
@@ -105,7 +106,7 @@ function Summary({ o }: { o: Overview }) {
 
 export function ApplicationPage() {
   const { appId = "", section = "deliveries" } = useParams();
-  const overview = useResource<Overview>(`/api/v1/applications/${encodeURIComponent(appId)}/overview`);
+  const overview = useResource<Overview>(`/api/v1/applications/${encodeURIComponent(appId)}/overview`, { live: deliveries(appId) });
   return (
     <Page crumbs={overview.data && <> / {overview.data.name}</>}>
       <Loaded resource={overview}>
@@ -115,9 +116,9 @@ export function ApplicationPage() {
           return (
             <>
               <h1>{o.name}</h1>
-              <Toolbar actions={<RefreshButton resource={overview} />}>
+              <p className="muted">
                 Application ID: <Copy text={o.id} />
-              </Toolbar>
+              </p>
               <Summary o={o} />
               <nav className="tabs" aria-label="Application sections">
                 {available.map((s) => (

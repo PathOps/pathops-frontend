@@ -13,6 +13,7 @@ PORT=${SMOKE_PORT:-18081}
 H=$(mktemp)
 trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true; rm -f "$H"' EXIT
 docker run -d --name "$NAME" -p "127.0.0.1:$PORT:8080" -e PATHOPS_DEX_ORIGIN=https://dex-smoke.example \
+  -e PATHOPS_EVENTS_ORIGIN=https://events-smoke.example \
   --read-only --tmpfs /tmp --tmpfs /etc/nginx/conf.d:uid=101 --user 101 --cap-drop ALL "$IMAGE" >/dev/null
 for _ in $(seq 30); do
   if curl -sf "http://127.0.0.1:$PORT/" >/dev/null; then break; fi
@@ -26,7 +27,8 @@ fail() {
 base=http://127.0.0.1:$PORT
 page=$(curl -sS -D "$H" "$base/applications/x/deliveries/y")
 grep -q "<title>PathOps</title>" <<<"$page" || fail "a client route is not the SPA"
-grep -qi "^content-security-policy: default-src 'self'; connect-src 'self' https://dex-smoke.example;" "$H" || fail "no CSP for the Dex origin"
+grep -qi "^content-security-policy: default-src 'self'; connect-src 'self' https://dex-smoke.example https://events-smoke.example;" "$H" \
+  || fail "no CSP for the Dex and pathops-events origins"
 grep -qi "^x-frame-options: DENY" "$H" || fail "no X-Frame-Options"
 grep -qi "^cache-control: no-cache" "$H" || fail "index.html is cached"
 asset=$(grep -o '/assets/[^"]*\.js' <<<"$page" | head -n 1)

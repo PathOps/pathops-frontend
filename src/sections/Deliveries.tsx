@@ -1,19 +1,19 @@
 import type { DeliverySummary, Paged } from "../api/types";
-import { running, useResource } from "../api/useResource";
-import { Duration, Head12, Loaded, Pager, RefreshButton, RunLink, Status, Time, Toolbar, usePageCursor, withCursor } from "../components/ui";
+import { useResource, type Resource } from "../api/useResource";
+import { Duration, Head12, Loaded, Pager, RunLink, Status, Time, usePageCursor, withCursor } from "../components/ui";
+import { applicationList } from "../live/topics";
 
-// Deliveries: 10 per page, newest first, paged by the Tenant CP (?cursor=).
+// Deliveries: 10 per page, newest first, paged by the Tenant CP (?cursor=);
+// live (the newest page shows new runs, any page its own runs' changes).
 export function Deliveries({ appId }: { appId: string }) {
   const cursor = usePageCursor();
-  const r = useResource<Paged & { deliveries: DeliverySummary[] }>(withCursor(`/api/v1/applications/${appId}/deliveries`, cursor), {
-    pollWhile: (d) => d.deliveries.some((x) => running(x.status)),
+  const r: Resource<Paged & { deliveries: DeliverySummary[] }> = useResource(withCursor(`/api/v1/applications/${appId}/deliveries`, cursor), {
+    live: (e) => applicationList("DELIVERY_CHANGED", appId, !r.data?.previousCursor, r.data?.deliveries.map((x) => x.id) ?? [])(e),
   });
   return (
     <>
       <h2>Delivery Runs</h2>
-      <Toolbar actions={<RefreshButton resource={r} />}>
-        Each delivery represents a tracked execution through build, validation and deployment.
-      </Toolbar>
+      <p className="muted">Each delivery represents a tracked execution through build, validation and deployment.</p>
       <Loaded resource={r} empty={(d) => d.deliveries.length === 0}>
         {(d) => (
           <div className="scroll">

@@ -1,13 +1,15 @@
 import type { ImageEntry } from "../api/types";
 import { useResource } from "../api/useResource";
-import { BuildLink, CopyButton, Loaded, RefreshButton, Short, Time, Toolbar } from "../components/ui";
+import { BuildLink, CopyButton, Loaded, Short, Time } from "../components/ui";
+import { builds } from "../live/topics";
 
+// Images: a succeeded build adds one (live: the Application's builds).
 export function Images({ appId }: { appId: string }) {
-  const r = useResource<{ images: ImageEntry[] }>(`/api/v1/applications/${appId}/images`);
+  const r = useResource<{ images: ImageEntry[] }>(`/api/v1/applications/${appId}/images`, { live: builds(appId) });
   return (
     <>
       <h2>Images</h2>
-      <Toolbar actions={<RefreshButton resource={r} />}>OCI artifacts stored in zot.</Toolbar>
+      <p className="muted">OCI artifacts stored in zot.</p>
       <Loaded resource={r} empty={(d) => d.images.length === 0}>
         {(d) => (
           <>

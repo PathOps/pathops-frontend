@@ -19,6 +19,9 @@ export interface OidcConfig {
   scopes: string[];
   authorizationEndpoint: string;
   tokenEndpoint: string;
+  // eventsUrl is the Cell's pathops-events (live updates, Decision 0063),
+  // https://<host>; null when the Cell has none.
+  eventsUrl: string | null;
 }
 
 interface Tokens {
@@ -79,8 +82,20 @@ export async function loadConfig(fetchFn: typeof fetch = fetch): Promise<OidcCon
     scopes: [...(doc.oidc.scopes ?? ["openid", "profile", "email"]), "offline_access"],
     authorizationEndpoint: meta.authorization_endpoint,
     tokenEndpoint: meta.token_endpoint,
+    eventsUrl: origin(doc.events?.url),
   };
   return config;
+}
+
+// origin is v when it is an https origin (no path), else null.
+function origin(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" && u.origin === v ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 // authorizationUrl starts a sign-in: it records the pending PKCE state and

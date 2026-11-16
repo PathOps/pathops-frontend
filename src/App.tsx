@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { SigningIn, signIn } from "./api/client";
 import { CALLBACK_PATH, completeSignIn, signedIn } from "./auth/oidc";
+import { EventProvider } from "./live/EventProvider";
 import { ApplicationPage } from "./pages/ApplicationPage";
 import { ApplicationsPage } from "./pages/ApplicationsPage";
 import { BuildPage } from "./pages/BuildPage";
@@ -107,7 +108,10 @@ export function App() {
         path="*"
         element={
           <Signed>
-            <AppRoutes />
+            {/* One live-update stream for the whole signed-in UI. */}
+            <EventProvider>
+              <AppRoutes />
+            </EventProvider>
           </Signed>
         }
       />

@@ -3,6 +3,8 @@ import { Link, Navigate, NavLink, useLocation } from "react-router-dom";
 import type { Inbox, Me } from "../api/types";
 import { useResource } from "../api/useResource";
 import { signOut } from "../auth/oidc";
+import { endLiveSession, LiveNote } from "../live/EventProvider";
+import { inbox as inboxTopic } from "../live/topics";
 
 const themeKey = "pathops-theme";
 
@@ -50,11 +52,10 @@ function useTheme(): [string, () => void] {
 export const InboxChanged = "pathops-inbox-changed";
 
 // MainNav is the header's main navigation: the Applications and the Inbox,
-// with the whole Inbox's unread count; the current section is marked. The
-// count is read with the page (no push channel): Refresh or another page
-// shows a new message.
+// with the whole Inbox's unread count, live on any page; the current section
+// is marked.
 function MainNav() {
-  const inbox = useResource<Inbox>("/api/v1/inbox?unread=true&limit=1");
+  const inbox = useResource<Inbox>("/api/v1/inbox?unread=true&limit=1", { live: inboxTopic });
   const { reload } = inbox;
   useEffect(() => {
     window.addEventListener(InboxChanged, reload);
@@ -149,11 +150,13 @@ export function Page({ crumbs, inbox, children }: { crumbs?: ReactNode; inbox?: 
           {crumbs}
         </nav>
         <span className="spacer" />
+        <LiveNote />
         <MainNav />
         <UserMenu
           who={who}
           onSignOut={() => {
             signOut();
+            endLiveSession();
             setOut(true);
           }}
         />

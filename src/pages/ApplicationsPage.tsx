@@ -3,6 +3,7 @@ import type { ApplicationSummary, EnvironmentRef, Technology } from "../api/type
 import { useResource } from "../api/useResource";
 import { Page } from "../components/Page";
 import { Ago, ExternalLink, Loaded, RefreshButton, RunLink, Status, Time, Toolbar } from "../components/ui";
+import { anyDelivery } from "../live/topics";
 
 export function technologyLine(t: Technology | null): string {
   if (!t) return "Technology not declared";
@@ -30,7 +31,9 @@ function Environment({ env }: { env: EnvironmentRef | null | undefined }) {
 
 // ApplicationsPage lists the signed-in user's Applications.
 export function ApplicationsPage() {
-  const apps = useResource<{ applications: ApplicationSummary[] }>("/api/v1/applications");
+  // Live for its deliveries; new Applications and their provisioning have
+  // no invalidation yet (Refresh).
+  const apps = useResource<{ applications: ApplicationSummary[] }>("/api/v1/applications", { live: anyDelivery });
   return (
     <Page>
       <h1>Applications</h1>

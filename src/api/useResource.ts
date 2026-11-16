@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLive } from "../live/EventProvider";
+import type { Topic } from "../live/topics";
 import { ApiError, SigningIn, useApi } from "./client";
 
 export interface Resource<T> {
@@ -8,10 +10,16 @@ export interface Resource<T> {
   reload: () => void;
 }
 
-// useResource reads path and reloads it on demand. While pollWhile(data)
-// holds (something is still running), it reads again every pollMs: explicit
-// polling of the REST read model, no push channel (Decision 0060 §11).
-export function useResource<T>(path: string | null, opts: { pollMs?: number; pollWhile?: (d: T) => boolean } = {}): Resource<T> {
+// useResource reads path and reloads it on demand. With live (Decision 0063)
+// it reads again when a live-update invalidation of that Topic arrives (or
+// after the stream reconnects): REST stays the source of truth. While
+// pollWhile(data) holds it also reads again every pollMs: only for what no
+// invalidation covers (Tekton's progress inside a running build, a
+// provisioning Run).
+export function useResource<T>(
+  path: string | null,
+  opts: { pollMs?: number; pollWhile?: (d: T) => boolean; live?: Topic } = {},
+): Resource<T> {
   const api = useApi();
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -47,6 +55,7 @@ export function useResource<T>(path: string | null, opts: { pollMs?: number; pol
   }, [data, opts.pollMs]);
 
   const reload = useCallback(() => setTick((n) => n + 1), []);
+  useLive(path === null ? undefined : opts.live, reload);
   return { data, error, loading, reload };
 }
 

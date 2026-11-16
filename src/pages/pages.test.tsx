@@ -149,7 +149,8 @@ describe("Application", () => {
     expect(screen.queryByText(/^Repository:/)).not.toBeInTheDocument();
     expect(screen.getByText("274af150e590")).toBeInTheDocument();
     const section = screen.getByRole("region", { name: "Images" });
-    expect(within(section).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    // Live (Decision 0063): no Refresh.
+    expect(within(section).queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
     expect(within(section).getAllByRole("button", { name: /^Copy / }).map((b) => b.getAttribute("aria-label"))).toEqual([
       `Copy zot-canary.demo.pathops.io/apps/${f.appId}@${f.digest}`,
     ]);
