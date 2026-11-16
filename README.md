@@ -140,7 +140,9 @@ Those views have no Refresh, and none is polled but for what follows. A dropped 
 reconnection every live view reads REST again (nothing is replayed). Without
 a session at pathops-events the browser signs in there once (its Dex client,
 `pathops-events-web`; Dex's login session answers) and comes back to the same
-page. What no invalidation reports is still read again every 5 s while it
+page: before the UI's own sign-in when the UI starts one, so a person signs in
+once and the signed-in UI never leaves (its tokens live in memory) to sign in
+again. What no invalidation reports is still read again every 5 s while it
 runs: Tekton's progress inside a running build (TaskRuns, steps). No view has
 a Refresh.
 

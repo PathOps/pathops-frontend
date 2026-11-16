@@ -85,6 +85,19 @@ export function endLiveSession(source: Pick<LiveSource, "base"> = browserSource)
   );
 }
 
+// liveSignInFirst runs before the UI's own sign-in: a browser without a
+// session at pathops-events signs in there first and comes back to this page
+// (true: it left the page), so the session exists once the UI is up. Signing
+// in there afterwards would leave the signed-in UI, whose tokens live in
+// memory, and sign it in again on return. Tried at most once in a while,
+// like the provider's own sign-in; otherwise the UI signs in alone.
+export async function liveSignInFirst(source: LiveSource = browserSource): Promise<boolean> {
+  const base = await source.base();
+  if (!base || (await source.signedIn(base)) !== false || !mayTrySignIn(Date.now())) return false;
+  source.signIn(base);
+  return true;
+}
+
 // mayTrySignIn: no sign-in there was started recently from this tab.
 function mayTrySignIn(now: number): boolean {
   try {
