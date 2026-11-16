@@ -7,8 +7,13 @@
 // signs in again, which Dex's login session (shared with the CLI and Forgejo)
 // answers without a password. Only the PKCE verifier, state and return path
 // cross the redirect, in sessionStorage, and are removed when it returns.
+//
+// Signing out ends both sessions: the tokens are dropped first, then the
+// browser goes to Dex's end_session_endpoint (RP-Initiated Logout), which
+// ends the Cell's login session and returns to SIGNED_OUT_PATH.
 
 export const CALLBACK_PATH = "/auth/callback";
+export const SIGNED_OUT_PATH = "/signed-out";
 const PENDING_KEY = "pathops.oidc.pending";
 // Renew a little before expiry (Dex's tokens live 5 minutes).
 const EXPIRY_MARGIN_MS = 30_000;
@@ -19,6 +24,9 @@ export interface OidcConfig {
   scopes: string[];
   authorizationEndpoint: string;
   tokenEndpoint: string;
+  // endSessionEndpoint is Dex's RP-Initiated Logout endpoint; null when the
+  // provider has none.
+  endSessionEndpoint: string | null;
   // eventsUrl is the Cell's pathops-events (live updates, Decision 0063),
   // https://<host>; null when the Cell has none.
   eventsUrl: string | null;
@@ -27,6 +35,8 @@ export interface OidcConfig {
 interface Tokens {
   accessToken: string;
   refreshToken?: string;
+  // idToken names this browser's Dex session to its logout (id_token_hint).
+  idToken?: string;
   expiresAt: number;
 }
 
@@ -82,6 +92,7 @@ export async function loadConfig(fetchFn: typeof fetch = fetch): Promise<OidcCon
     scopes: [...(doc.oidc.scopes ?? ["openid", "profile", "email"]), "offline_access"],
     authorizationEndpoint: meta.authorization_endpoint,
     tokenEndpoint: meta.token_endpoint,
+    endSessionEndpoint: httpsUrl(meta.end_session_endpoint),
     eventsUrl: origin(doc.events?.url),
   };
   return config;
@@ -93,6 +104,16 @@ function origin(v: unknown): string | null {
   try {
     const u = new URL(v);
     return u.protocol === "https:" && u.origin === v ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+// httpsUrl is v when it is an https URL, else null.
+function httpsUrl(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  try {
+    return new URL(v).protocol === "https:" ? v : null;
   } catch {
     return null;
   }
@@ -134,6 +155,7 @@ async function tokenRequest(cfg: OidcConfig, body: Record<string, string>, fetch
   return {
     accessToken: t.access_token,
     refreshToken: typeof t.refresh_token === "string" ? t.refresh_token : undefined,
+    idToken: typeof t.id_token === "string" ? t.id_token : undefined,
     expiresAt: Date.now() + (Number(t.expires_in) || 300) * 1000,
   };
 }
@@ -172,7 +194,9 @@ export async function accessToken(fetchFn: typeof fetch = fetch): Promise<string
     refreshing = loadConfig(fetchFn)
       .then((cfg) => tokenRequest(cfg, { grant_type: "refresh_token", refresh_token: refreshToken }, fetchFn))
       .then((t) => {
-        tokens = { ...t, refreshToken: t.refreshToken ?? refreshToken };
+        // A sign-out while the request ran stays signed out.
+        if (!tokens) throw new AuthError("signed out");
+        tokens = { ...t, refreshToken: t.refreshToken ?? refreshToken, idToken: t.idToken ?? tokens.idToken };
         return tokens.accessToken;
       })
       .finally(() => {
@@ -187,8 +211,27 @@ export async function accessToken(fetchFn: typeof fetch = fetch): Promise<string
   }
 }
 
+// signOut drops this page's tokens (the UI's own session).
 export function signOut(): void {
   tokens = null;
+}
+
+// endSession signs this page out at once and returns where the browser goes
+// next to end the Cell's login session too: Dex's logout, naming this
+// session (id_token_hint) and coming back to the signed-out page; Dex asks
+// the user to confirm when it cannot match the hint to its session. Without
+// a logout endpoint at the provider, the signed-out page directly.
+export function endSession(fetchFn: typeof fetch = fetch): Promise<string> {
+  const idToken = tokens?.idToken;
+  signOut();
+  return loadConfig(fetchFn)
+    .then((cfg) => {
+      if (!cfg.endSessionEndpoint) return SIGNED_OUT_PATH;
+      if (!idToken) return cfg.endSessionEndpoint;
+      const q = new URLSearchParams({ id_token_hint: idToken, post_logout_redirect_uri: window.location.origin + SIGNED_OUT_PATH });
+      return cfg.endSessionEndpoint + "?" + q.toString();
+    })
+    .catch(() => SIGNED_OUT_PATH);
 }
 
 export function signedIn(): boolean {

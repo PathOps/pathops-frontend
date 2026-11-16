@@ -74,11 +74,15 @@ export const browserSource: LiveSource = {
 };
 
 // endLiveSession signs out of pathops-events too (its session cookie is
-// HttpOnly, on its host): a sign-out of the UI ends the live updates.
-export function endLiveSession(source: Pick<LiveSource, "base"> = browserSource) {
-  void source.base().then((base) => {
-    if (base) void fetch(base + "/logout", { method: "POST", credentials: "include" }).catch(() => undefined);
-  });
+// HttpOnly, on its host): a sign-out of the UI ends the live updates. It
+// resolves once the request is sent; keepalive lets it outlive the page.
+export function endLiveSession(source: Pick<LiveSource, "base"> = browserSource): Promise<void> {
+  return source.base().then(
+    (base) => {
+      if (base) void fetch(base + "/logout", { method: "POST", credentials: "include", keepalive: true }).catch(() => undefined);
+    },
+    () => undefined,
+  );
 }
 
 // mayTrySignIn: no sign-in there was started recently from this tab.

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, Navigate, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import type { Inbox, Me } from "../api/types";
 import { useResource } from "../api/useResource";
-import { signOut } from "../auth/oidc";
+import { endSession } from "../auth/oidc";
 import { endLiveSession, LiveNote } from "../live/EventProvider";
 import { inbox as inboxTopic } from "../live/topics";
 
@@ -134,7 +134,6 @@ function UserMenu({ who, onSignOut }: { who: string; onSignOut: () => void }) {
 // (default) or the Inbox, whose pages give their own crumbs.
 export function Page({ crumbs, inbox, children }: { crumbs?: ReactNode; inbox?: boolean; children: ReactNode }) {
   const me = useResource<Me>("/api/v1/me");
-  const [out, setOut] = useState(false);
   const who = me.data ? (me.data.email ?? me.data.name ?? me.data.subject) : "Account";
   return (
     <>
@@ -155,12 +154,12 @@ export function Page({ crumbs, inbox, children }: { crumbs?: ReactNode; inbox?: 
         <UserMenu
           who={who}
           onSignOut={() => {
-            signOut();
-            endLiveSession();
-            setOut(true);
+            // This page's tokens go first; then pathops-events' session and
+            // the Cell's login session at Dex, which returns to /signed-out.
+            const next = endSession();
+            void Promise.all([next, endLiveSession()]).then(([to]) => window.location.replace(to));
           }}
         />
-        {out && <Navigate to="/signed-out" replace />}
       </header>
       <main>{children}</main>
       <footer>

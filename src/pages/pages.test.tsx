@@ -2,6 +2,9 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
+import { authorizationUrl, completeSignIn, loadConfig, resetForTests, signedIn } from "../auth/oidc";
+import { MemoryRouter } from "react-router-dom";
+import { App } from "../App";
 import { Duration } from "../components/ui";
 import type { DeliveryDetail } from "../api/types";
 import { fakeApi, renderAt } from "../test/render";
@@ -346,12 +349,43 @@ describe("Header", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("signs out from the user's menu", async () => {
-    renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/me": me }));
-    await userEvent.click(await screen.findByRole("button", { name: /alice@example\.test/ }));
-    await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
-    // The page leaves for /signed-out (outside these routes).
-    expect(await screen.findByText("No such page.")).toBeInTheDocument();
+  it("signs out from the user's menu: pathops-events' session, then Dex's logout, which returns to the signed-out page", async () => {
+    const replace = vi.fn();
+    const requests: [string, RequestInit | undefined][] = [];
+    vi.stubGlobal("location", { origin: window.location.origin, pathname: "/applications", search: "", replace });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (u: string, init?: RequestInit) => {
+        requests.push([u, init]);
+        if (u === "/.well-known/pathops")
+          return Response.json({ oidc: { issuer: "https://dex.example" }, ui: { clientId: "pathops-ui" }, events: { url: "https://events.example" } });
+        if (u === "https://dex.example/.well-known/openid-configuration")
+          return Response.json({ issuer: "https://dex.example", authorization_endpoint: "https://dex.example/auth",
+            token_endpoint: "https://dex.example/token", end_session_endpoint: "https://dex.example/logout" });
+        if (u === "https://dex.example/token")
+          return Response.json({ access_token: "at-1", token_type: "Bearer", expires_in: 300, id_token: "id-1" });
+        return new Response("", { status: 204 });
+      }),
+    );
+    try {
+      await authorizationUrl(await loadConfig(), "/");
+      const { state } = JSON.parse(sessionStorage.getItem("pathops.oidc.pending")!);
+      await completeSignIn(`?code=c&state=${state}`);
+      renderAt("/", fakeApi({ "/api/v1/applications": { applications: [] }, "/api/v1/me": me }));
+      await userEvent.click(await screen.findByRole("button", { name: /alice@example\.test/ }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+      await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+      const to = new URL(replace.mock.calls[0][0]);
+      expect(to.origin + to.pathname).toBe("https://dex.example/logout");
+      expect(to.searchParams.get("id_token_hint")).toBe("id-1");
+      expect(to.searchParams.get("post_logout_redirect_uri")).toBe(window.location.origin + "/signed-out");
+      expect(signedIn()).toBe(false);
+      const logout = requests.find(([u]) => u === "https://events.example/logout");
+      expect(logout?.[1]).toMatchObject({ method: "POST", credentials: "include", keepalive: true });
+    } finally {
+      vi.unstubAllGlobals();
+      resetForTests();
+    }
   });
 });
 
@@ -699,5 +733,19 @@ describe("Breadcrumb", () => {
     renderAt("/applications", fakeApi({ "/api/v1/applications": { applications: [] } }));
     const nav = screen.getByRole("navigation", { name: "Main" });
     expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Applications", "Inbox"]);
+  });
+});
+
+describe("Signed out", () => {
+  it("back from Dex's logout: only that the user is signed out, and a way to sign in again", () => {
+    render(
+      <MemoryRouter initialEntries={["/signed-out"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^You are signed out\.$/);
+    expect(screen.getByRole("link", { name: "Sign in again" })).toHaveAttribute("href", "/");
+    expect(document.body).not.toHaveTextContent(/Dex|login session|stays/);
+    expect(screen.queryByRole("status", { name: "Signing in" })).not.toBeInTheDocument();
   });
 });

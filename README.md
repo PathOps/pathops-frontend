@@ -37,6 +37,15 @@ reload signs in again through Dex's login session (shared with the CLI and
 Forgejo), without a password. Only the PKCE verifier, state and return path
 cross the redirect, in `sessionStorage`.
 
+**Sign out** (the user's menu) means the same as `pathops logout`: the page's
+tokens are dropped first, then pathops-events' session ends and the browser
+goes to Dex's `end_session_endpoint` (RP-Initiated Logout) with the session's
+ID token as `id_token_hint`. Dex ends the Cell's login session (the one
+Forgejo, the Artifact Store and pathops-events sign in with; Dex asks to
+confirm when the hint is not its current session) and returns to
+`/signed-out` ("You are signed out." and Sign in again), the only
+`post_logout_redirect_uri` the core registers.
+
 ## Screens (v0.7)
 
 Plain, document-like pages: bordered tables, bold colored statuses, a light

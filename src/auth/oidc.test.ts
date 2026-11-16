@@ -6,9 +6,11 @@ import {
   base64url,
   challenge,
   completeSignIn,
+  endSession,
   loadConfig,
   resetForTests,
   safeReturn,
+  signedIn,
 } from "./oidc";
 
 const issuer = "https://dex-test.example";
@@ -129,5 +131,75 @@ describe("sign-in", () => {
     expect(safeReturn("https://evil.example")).toBe("/");
     expect(safeReturn("/auth/callback?code=x")).toBe("/");
     expect(safeReturn("/applications/a")).toBe("/applications/a");
+  });
+});
+
+describe("sign-out", () => {
+  const withLogout = (endSession: unknown, token: Record<string, unknown> = {}) =>
+    discoveryFetch((url, init) => {
+      if (url === issuer + "/.well-known/openid-configuration")
+        return Response.json({ issuer, authorization_endpoint: issuer + "/auth", token_endpoint: issuer + "/token", end_session_endpoint: endSession });
+      if (url === issuer + "/token") {
+        const q = new URLSearchParams(String(init?.body));
+        if (q.get("grant_type") === "refresh_token") return Response.json({ access_token: "at-2", token_type: "bearer", expires_in: 300 });
+        return Response.json({ access_token: "at-1", token_type: "Bearer", expires_in: 10, refresh_token: "rt-1", id_token: "id-1", ...token });
+      }
+    });
+  async function signInWith(f: typeof fetch) {
+    await authorizationUrl(await loadConfig(f), "/");
+    const { state } = JSON.parse(sessionStorage.getItem("pathops.oidc.pending")!);
+    await completeSignIn(`?code=c&state=${state}`, f);
+  }
+
+  it("drops the tokens at once, then sends the browser to Dex's logout for this session, back to the signed-out page", async () => {
+    const f = withLogout(issuer + "/logout");
+    await signInWith(f);
+    expect(signedIn()).toBe(true);
+    const next = endSession(f);
+    expect(signedIn()).toBe(false);
+    expect(await accessToken(f)).toBeNull();
+    const url = new URL(await next);
+    expect(url.origin + url.pathname).toBe(issuer + "/logout");
+    expect(url.searchParams.get("id_token_hint")).toBe("id-1");
+    expect(url.searchParams.get("post_logout_redirect_uri")).toBe(window.location.origin + "/signed-out");
+    expect(JSON.stringify(localStorage) + JSON.stringify(sessionStorage)).not.toContain("id-1");
+  });
+
+  it("keeps the session's ID token across a renewal (Dex may not send another)", async () => {
+    const f = withLogout(issuer + "/logout");
+    await signInWith(f);
+    expect(await accessToken(f)).toBe("at-2");
+    expect(new URL(await endSession(f)).searchParams.get("id_token_hint")).toBe("id-1");
+  });
+
+  it("a renewal still running when the user signs out does not sign them back in", async () => {
+    let release: (r: Response) => void = () => undefined;
+    const base = withLogout(issuer + "/logout");
+    let renewing = false;
+    const f = vi.fn(async (url: string, init?: RequestInit) => {
+      if (renewing && url === issuer + "/token") return new Promise<Response>((r) => (release = r));
+      return base(url, init);
+    }) as unknown as typeof fetch;
+    await signInWith(f);
+    renewing = true;
+    const renewal = accessToken(f);
+    await new Promise((r) => setTimeout(r, 0));
+    await endSession(f);
+    release(Response.json({ access_token: "at-2", token_type: "bearer", expires_in: 300 }));
+    expect(await renewal).toBeNull();
+    expect(signedIn()).toBe(false);
+  });
+
+  it("without an ID token Dex's logout asks the user to confirm (no hint, no return); without a logout endpoint only the page signs out", async () => {
+    let f = withLogout(issuer + "/logout", { id_token: undefined });
+    await signInWith(f);
+    expect(await endSession(f)).toBe(issuer + "/logout");
+    for (const ep of [undefined, "http://dex-test.example/logout", "not a url"]) {
+      resetForTests();
+      f = withLogout(ep);
+      await signInWith(f);
+      expect(await endSession(f)).toBe("/signed-out");
+      expect(signedIn()).toBe(false);
+    }
   });
 });

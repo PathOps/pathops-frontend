@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { SigningIn, signIn } from "./api/client";
-import { CALLBACK_PATH, completeSignIn, signedIn } from "./auth/oidc";
+import { CALLBACK_PATH, completeSignIn, SIGNED_OUT_PATH, signedIn } from "./auth/oidc";
 import { EventProvider } from "./live/EventProvider";
 import { ApplicationPage } from "./pages/ApplicationPage";
 import { ApplicationsPage } from "./pages/ApplicationsPage";
@@ -90,11 +90,15 @@ function Callback() {
   return <SigningInNotice />;
 }
 
+// SignedOut is where a sign-out ends, back from Dex's logout (or directly,
+// when the Cell's Dex has none).
 function SignedOut() {
   return (
     <main>
-      <p>You are signed out of this page. Your Cell login session at Dex stays until it ends.</p>
-      <a href="/">Sign in again</a>
+      <h1>You are signed out.</h1>
+      <p>
+        <a href="/">Sign in again</a>
+      </p>
     </main>
   );
 }
@@ -103,7 +107,7 @@ export function App() {
   return (
     <Routes>
       <Route path={CALLBACK_PATH} element={<Callback />} />
-      <Route path="/signed-out" element={<SignedOut />} />
+      <Route path={SIGNED_OUT_PATH} element={<SignedOut />} />
       <Route
         path="*"
         element={
