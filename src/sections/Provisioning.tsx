@@ -1,7 +1,8 @@
 import { Fragment } from "react";
 import type { Provisioning, ProvisioningStep } from "../api/types";
-import { running, useResource } from "../api/useResource";
-import { Duration, Loaded, RefreshButton, Status, Time, Toolbar, humanize, newestFirst, seconds } from "../components/ui";
+import { useResource } from "../api/useResource";
+import { Duration, Loaded, Status, Time, humanize, newestFirst, seconds } from "../components/ui";
+import { application } from "../live/topics";
 
 // A step's span: its first attempt's start to its last attempt's end.
 function span(s: ProvisioningStep): { start: string | null; end: string | null } {
@@ -10,7 +11,8 @@ function span(s: ProvisioningStep): { start: string | null; end: string | null }
 
 export function ProvisioningSection({ appId }: { appId: string }) {
   const p = useResource<Provisioning>(`/api/v1/applications/${appId}/provisioning`, {
-    pollWhile: (d) => running(d.run.status),
+    // Live: every Step that starts or ends (APPLICATION_CHANGED).
+    live: application(appId),
   });
   return (
     <>
@@ -18,10 +20,10 @@ export function ProvisioningSection({ appId }: { appId: string }) {
       <Loaded resource={p}>
         {(d) => (
           <>
-            <Toolbar actions={<RefreshButton resource={p} />}>
+            <p>
               Steps executed when creating the application: <Status status={d.run.status} />, completed{" "}
               <Time at={d.run.completedAt} />.
-            </Toolbar>
+            </p>
             <div className="scroll">
               <table aria-label="Provisioning steps">
                 <thead>

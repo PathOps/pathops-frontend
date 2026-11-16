@@ -120,7 +120,8 @@ Decision 0063: the signed-in UI holds one Server-Sent Events stream
 (`EventProvider`, `src/live/`) to the Cell's pathops-events (its URL from the
 Tenant Control Plane's discovery, `events.url`), whatever views are open. An
 event is only an invalidation (`BUILD_CHANGED`, `DELIVERY_CHANGED`,
-`INBOX_CHANGED`, with the Application and the resource's id): a view whose
+`INBOX_CHANGED`, `APPLICATION_CHANGED`, with the Application and the
+resource's id, none for the Application itself): a view whose
 Topic it matches reads REST again (`useResource`'s `live`); every other view
 ignores it. The Topics are in one place (`src/live/topics.ts`):
 
@@ -129,8 +130,9 @@ ignores it. The Topics are in one place (`src/live/topics.ts`):
 | Builds / Delivery Runs / Images (newest page) | that type (an image: `BUILD_CHANGED`), of its Application |
 | Builds / Delivery Runs / Images (an older page) | that type, for a row on the page (a new one never moves the page) |
 | Build, Delivery run | that Build's / DeliveryRun's id |
-| Application overview | its Application's DeliveryRuns |
-| Applications | any DeliveryRun (new Applications and provisioning: Refresh) |
+| Application overview | its Application (`APPLICATION_CHANGED`) and its DeliveryRuns |
+| Provisioning, Repositories | its Application (`APPLICATION_CHANGED`: created, a provisioning Step started or ended) |
+| Applications | any Application (`APPLICATION_CHANGED`: a new one, its provisioning) and any DeliveryRun |
 | Inbox, the header's unread count | `INBOX_CHANGED` (an older Inbox page: its own messages) |
 
 Those views have no Refresh, and none is polled but for what follows. A dropped stream reconnects
@@ -139,8 +141,8 @@ reconnection every live view reads REST again (nothing is replayed). Without
 a session at pathops-events the browser signs in there once (its Dex client,
 `pathops-events-web`; Dex's login session answers) and comes back to the same
 page. What no invalidation reports is still read again every 5 s while it
-runs: Tekton's progress inside a running build (TaskRuns, steps) and a
-provisioning Run, which keep Refresh with the Repositories.
+runs: Tekton's progress inside a running build (TaskRuns, steps). No view has
+a Refresh.
 
 ## Image
 

@@ -3,7 +3,7 @@ import type { Overview } from "../api/types";
 import { useResource } from "../api/useResource";
 import { Page } from "../components/Page";
 import { Copy, ExternalLink, Loaded, NotYet, RunLink, Status } from "../components/ui";
-import { deliveries } from "../live/topics";
+import { applicationOverview } from "../live/topics";
 import { Builds } from "../sections/Builds";
 import { Deliveries } from "../sections/Deliveries";
 import { Images } from "../sections/Images";
@@ -106,7 +106,7 @@ function Summary({ o }: { o: Overview }) {
 
 export function ApplicationPage() {
   const { appId = "", section = "deliveries" } = useParams();
-  const overview = useResource<Overview>(`/api/v1/applications/${encodeURIComponent(appId)}/overview`, { live: deliveries(appId) });
+  const overview = useResource<Overview>(`/api/v1/applications/${encodeURIComponent(appId)}/overview`, { live: applicationOverview(appId) });
   return (
     <Page crumbs={overview.data && <> / {overview.data.name}</>}>
       <Loaded resource={overview}>

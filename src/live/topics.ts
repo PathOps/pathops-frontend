@@ -2,7 +2,9 @@
 // the only place that decides which view an invalidation concerns. A view
 // names what it shows with a Topic; it never inspects events itself.
 
-export type LiveType = "BUILD_CHANGED" | "DELIVERY_CHANGED" | "INBOX_CHANGED";
+// APPLICATION_CHANGED: the Application itself (created, its provisioning);
+// it names no resource.
+export type LiveType = "BUILD_CHANGED" | "DELIVERY_CHANGED" | "INBOX_CHANGED" | "APPLICATION_CHANGED";
 
 // LiveEvent is one invalidation: what changed (never its new state).
 export interface LiveEvent {
@@ -33,8 +35,19 @@ export function deliveries(appId: string): Topic {
   return (e) => e.type === "DELIVERY_CHANGED" && e.applicationId === appId;
 }
 
-// The deliveries of any Application (the Applications list's last delivery).
-export const anyDelivery: Topic = (e) => e.type === "DELIVERY_CHANGED";
+// The Applications list: any Application created or provisioned, and any
+// delivery (its last delivery).
+export const applications: Topic = (e) => e.type === "APPLICATION_CHANGED" || e.type === "DELIVERY_CHANGED";
+
+// One Application itself: its provisioning, its repositories.
+export function application(appId: string): Topic {
+  return (e) => e.type === "APPLICATION_CHANGED" && e.applicationId === appId;
+}
+
+// An Application's overview: the Application and its DeliveryRuns.
+export function applicationOverview(appId: string): Topic {
+  return (e) => application(appId)(e) || deliveries(appId)(e);
+}
 
 // The Inbox: its list and the unread count.
 export const inbox: Topic = (e) => e.type === "INBOX_CHANGED";
@@ -49,7 +62,7 @@ export function isLiveEvent(v: unknown): v is LiveEvent {
   if (typeof v !== "object" || v === null) return false;
   const e = v as Record<string, unknown>;
   return (
-    (e.type === "BUILD_CHANGED" || e.type === "DELIVERY_CHANGED" || e.type === "INBOX_CHANGED") &&
+    (e.type === "BUILD_CHANGED" || e.type === "DELIVERY_CHANGED" || e.type === "INBOX_CHANGED" || e.type === "APPLICATION_CHANGED") &&
     typeof e.applicationId === "string" &&
     (e.resourceId === undefined || typeof e.resourceId === "string") &&
     typeof e.occurredAt === "string"

@@ -1,6 +1,7 @@
 import type { Repositories } from "../api/types";
 import { useResource } from "../api/useResource";
-import { ExternalLink, Loaded, RefreshButton, Toolbar } from "../components/ui";
+import { ExternalLink, Loaded } from "../components/ui";
+import { application } from "../live/topics";
 
 const roles: Record<string, string> = { source: "source", preflight: "gitops-preflight", production: "gitops-production" };
 
@@ -14,13 +15,12 @@ function throughSignIn(url: string): string {
 }
 
 export function RepositoriesSection({ appId }: { appId: string }) {
-  const r = useResource<Repositories>(`/api/v1/applications/${appId}/repositories`);
+  // Live: provisioning creates them (APPLICATION_CHANGED).
+  const r = useResource<Repositories>(`/api/v1/applications/${appId}/repositories`, { live: application(appId) });
   return (
     <>
       <h2>Repositories</h2>
-      <Toolbar actions={<RefreshButton resource={r} />}>
-        The application's source code and the GitOps repositories of its environments, in Forgejo.
-      </Toolbar>
+      <p className="muted">The application's source code and the GitOps repositories of its environments, in Forgejo.</p>
       <Loaded resource={r} empty={(d) => d.repositories.length === 0}>
         {(d) => (
           <>

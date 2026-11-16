@@ -142,7 +142,8 @@ describe("Application", () => {
     expect(screen.queryByRole("columnheader", { name: "Clone" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Branch" })).not.toBeInTheDocument();
     const section = screen.getByRole("region", { name: "Repositories" });
-    expect(within(section).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    // Live (APPLICATION_CHANGED): no Refresh.
+    expect(within(section).queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
     expect(section).not.toHaveTextContent("Source webhook");
   });
 

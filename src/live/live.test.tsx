@@ -104,6 +104,9 @@ function table() {
     "/api/v1/builds/build-ok/tasks": f.tasksOk,
     "/api/v1/inbox?unread=true&limit=1": { messages: [], unread: 0, previousCursor: null, nextCursor: null },
     "/api/v1/inbox": { messages: [], unread: 0, previousCursor: null, nextCursor: null },
+    "/api/v1/applications": f.applications,
+    [`${app}/provisioning`]: f.provisioning,
+    [`${app}/repositories`]: f.repositories,
   } as Record<string, unknown>;
 }
 
@@ -185,6 +188,46 @@ describe("Live updates", () => {
     act(() => c.send(ev("BUILD_CHANGED", f.appId, "build-ok")));
     await waitFor(() => expect(count(api, page)).toBe(before + 1));
     expect(count(api, `${app}/images`)).toBe(0);
+  });
+
+  it("the Applications list follows any Application's changes (a new one, its provisioning) and any delivery, without a Refresh", async () => {
+    const source = fakeSource();
+    const api = fakeApi(table());
+    renderLive("/applications", api, source);
+    await screen.findByRole("link", { name: "manual-web" });
+    const c = await connected(source);
+    expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+    const before = count(api, "/api/v1/applications");
+    act(() => c.send(ev("BUILD_CHANGED", f.appId, "build-ok")));
+    act(() => c.send(ev("INBOX_CHANGED", f.appId)));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(count(api, "/api/v1/applications")).toBe(before);
+    act(() => c.send(ev("APPLICATION_CHANGED", otherApp)));
+    await waitFor(() => expect(count(api, "/api/v1/applications")).toBe(before + 1));
+    act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
+    await waitFor(() => expect(count(api, "/api/v1/applications")).toBe(before + 2));
+  });
+
+  it("an Application's provisioning, repositories and overview follow its own APPLICATION_CHANGED only, without Refresh or polling", async () => {
+    for (const section of ["provisioning", "repositories"]) {
+      const source = fakeSource();
+      const api = fakeApi({ ...table(), [`${app}/provisioning`]: { ...f.provisioning, run: { ...f.provisioning.run, status: "RUNNING", completedAt: null } } });
+      const view = renderLive(`/applications/${f.appId}/${section}`, api, source);
+      await screen.findByRole("heading", { level: 2, name: section === "provisioning" ? "Provisioning" : "Repositories" });
+      const c = await connected(source);
+      expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+      const path = `${app}/${section}`;
+      await waitFor(() => expect(count(api, path)).toBe(1));
+      const overview = count(api, `${app}/overview`);
+      act(() => c.send(ev("APPLICATION_CHANGED", otherApp)));
+      act(() => c.send(ev("BUILD_CHANGED", f.appId, "build-ok")));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(count(api, path)).toBe(1);
+      act(() => c.send(ev("APPLICATION_CHANGED", f.appId)));
+      await waitFor(() => expect(count(api, path)).toBe(2));
+      await waitFor(() => expect(count(api, `${app}/overview`)).toBe(overview + 1));
+      view.unmount();
+    }
   });
 
   it("a Build's page refetches for that Build only", async () => {

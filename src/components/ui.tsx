@@ -196,14 +196,6 @@ export function Loaded<T>({
   return <>{children(resource.data)}</>;
 }
 
-export function RefreshButton({ resource }: { resource: Resource<unknown> }) {
-  return (
-    <button type="button" onClick={resource.reload} disabled={resource.loading}>
-      {resource.loading ? "Refreshing…" : "Refresh"}
-    </button>
-  );
-}
-
 // Facts is a two-column table of label and value rows.
 export function Facts({ label, children }: { label?: string; children: ReactNode }) {
   return (
@@ -219,16 +211,6 @@ export function Fact({ label, children }: { label: string; children: ReactNode }
       <th scope="row">{label}</th>
       <td>{children}</td>
     </tr>
-  );
-}
-
-// Toolbar is a line of text with its actions (Refresh) on the right.
-export function Toolbar({ children, actions }: { children?: ReactNode; actions: ReactNode }) {
-  return (
-    <div className="toolbar">
-      <span>{children}</span>
-      <span>{actions}</span>
-    </div>
   );
 }
 
