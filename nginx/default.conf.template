@@ -9,8 +9,12 @@ map "${PATHOPS_EVENTS_ORIGIN}" $pathops_events_ws {
     default "";
 }
 
+# The listener (nginx/listen.sh, at start): HTTPS only on 8443 with the
+# certificate mounted at /etc/pathops-frontend/tls (a Cell: its Cell CA leaf
+# for pathops-frontend.pathops-system.svc, which Traefik re-encrypts to);
+# plain HTTP on 8080 only without one (a workstation).
 server {
-    listen 8080;
+    include /etc/nginx/conf.d/listen.inc;
     server_name _;
     root /usr/share/nginx/html;
     server_tokens off;

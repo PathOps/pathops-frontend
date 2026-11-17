@@ -159,11 +159,17 @@ ghcr.io/pathops/pathops-frontend:v<version>
 ```
 
 Releases are published only by the `release` workflow, from tags `v<version>`
-equal to `package.json`'s version. Pin the image by digest. The container
-listens on 8080 as a non-root user and needs `PATHOPS_DEX_ORIGIN` (the Cell's
-Dex origin) and `PATHOPS_EVENTS_ORIGIN` (its pathops-events origin), the only
-other origins of its Content Security Policy; with a
-read-only root filesystem it needs writable `/tmp` and `/etc/nginx/conf.d`.
+equal to `package.json`'s version. Pin the image by digest. The container runs
+as a non-root user and needs `PATHOPS_DEX_ORIGIN` (the Cell's Dex origin) and
+`PATHOPS_EVENTS_ORIGIN` (its pathops-events origin), the only other origins of
+its Content Security Policy; with a read-only root filesystem it needs writable
+`/tmp` and `/etc/nginx/conf.d`.
+
+With a certificate and key mounted at `/etc/pathops-frontend/tls`
+(`tls.crt`, `tls.key`) it serves HTTPS only, on 8443 (TLS 1.2+), and has no
+plaintext listener: in a Cell that is its Cell CA leaf for
+`pathops-frontend.pathops-system.svc`, which Traefik verifies when it
+re-encrypts to it. Without one it serves plain HTTP on 8080 (a workstation).
 
 ## Develop
 
@@ -174,5 +180,5 @@ Node runs only in the pinned build image (`Dockerfile`), through
 scripts/npm.sh ci
 scripts/npm.sh run check              # typecheck, unit tests (Vitest + Testing Library), production build
 docker build -t pathops-frontend:local . # the same, then the nginx image
-scripts/smoke.sh pathops-frontend:local # serve it read-only and check the SPA and its headers
+scripts/smoke.sh pathops-frontend:local # serve it read-only and check the SPA and its headers, then over TLS
 ```

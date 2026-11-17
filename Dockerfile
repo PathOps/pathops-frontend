@@ -17,5 +17,6 @@ LABEL org.opencontainers.image.title="pathops-frontend" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${RELEASE_VERSION}"
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY --chmod=0755 nginx/listen.sh /docker-entrypoint.d/30-pathops-listen.sh
 COPY --from=build /src/dist /usr/share/nginx/html
-EXPOSE 8080
+EXPOSE 8443 8080
