@@ -6,6 +6,8 @@ import { Copy, ExternalLink, Loaded, NotYet, RunLink, Status } from "../componen
 import { applicationOverview } from "../live/topics";
 import { Builds } from "../sections/Builds";
 import { Deliveries } from "../sections/Deliveries";
+import { Deployments } from "../sections/Deployments";
+import { Preflight } from "../sections/Preflight";
 import { Images } from "../sections/Images";
 import { ProvisioningSection } from "../sections/Provisioning";
 import { RepositoriesSection } from "../sections/Repositories";
@@ -36,15 +38,19 @@ const sections: Record<string, Section> = {
   preflight: {
     title: "Preflight",
     planned: true,
-    render: () => (
-      <NotYet
-        title="Preflight"
-        what="Validation environment before production delivery."
-        state="The preflight environment has not been created yet."
-      />
-    ),
+    render: (id, o) =>
+      o.preflight ? (
+        <Preflight appId={id} env={o.preflight} />
+      ) : (
+        <NotYet
+          title="Preflight"
+          what="Validation environment before production delivery."
+          state="The preflight environment has not been created yet."
+        />
+      ),
   },
   deliveries: { title: "Delivery", render: (id) => <Deliveries appId={id} /> },
+  deployments: { title: "Deployments", render: (id) => <Deployments appId={id} /> },
   validations: {
     title: "Validations",
     planned: true,
@@ -61,6 +67,18 @@ const sections: Record<string, Section> = {
   repositories: { title: "Repositories", render: (id) => <RepositoriesSection appId={id} /> },
   provisioning: { title: "Provisioning", render: (id) => <ProvisioningSection appId={id} /> },
 };
+
+// PreflightState: the Deployment running in Preflight, or why there is none.
+function PreflightState({ appId, o }: { appId: string; o: Overview }) {
+  if (!o.preflight) return <span className="muted">not created yet</span>;
+  const d = o.preflight.current ?? o.preflight.last;
+  if (!d) return <span className="muted">not deployed yet</span>;
+  return (
+    <>
+      Deployment #{d.number} — <Status status={d.status} /> — <RunLink appId={appId} id={d.deliveryRunId} number={d.deliveryNumber} />
+    </>
+  );
+}
 
 function Summary({ o }: { o: Overview }) {
   const last = o.deliveries.last;
@@ -96,7 +114,7 @@ function Summary({ o }: { o: Overview }) {
           </td>
           <th scope="row">Preflight</th>
           <td>
-            <span className="muted">not created yet</span>
+            <PreflightState appId={o.id} o={o} />
           </td>
         </tr>
       </tbody>

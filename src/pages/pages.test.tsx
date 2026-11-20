@@ -750,3 +750,68 @@ describe("Signed out", () => {
     expect(screen.queryByRole("status", { name: "Signing in" })).not.toBeInTheDocument();
   });
 });
+
+describe("Preflight (Decision 0064)", () => {
+  const dep = {
+    id: "dep-1",
+    number: 1,
+    environment: "PREFLIGHT",
+    status: "SUCCEEDED",
+    deliveryRunId: "run-ok",
+    deliveryNumber: 1,
+    sourceRevision: f.okRev,
+    head12: f.okRev.slice(0, 12),
+    image: null,
+    imageReference: `zot-test.example/apps/${f.appId}:${f.okRev.slice(0, 12)}@${f.digest}`,
+    gitopsRepository: "alice/hello-gitops-preflight",
+    gitopsTaskRevision: "1111111111111111111111111111111111111111",
+    gitopsCommit: "2222222222222222222222222222222222222222",
+    startedAt: "2026-11-20T10:00:00Z",
+    completedAt: "2026-11-20T10:02:00Z",
+    durationSeconds: 120,
+  };
+  const withPreflight = {
+    ...all,
+    [`${app}/overview`]: {
+      ...f.overview,
+      sections: [...f.overview.sections, "preflight", "deployments"],
+      preflight: { environment: "PREFLIGHT", last: dep, current: dep },
+    },
+    [`${app}/deployments`]: { deployments: [dep], nextCursor: null, previousCursor: null },
+  };
+
+  it("summarizes the deployed Preflight, its exact image and revisions, and lists Deployments", async () => {
+    renderAt(`/applications/${f.appId}/preflight`, fakeApi(withPreflight));
+    const summary = await screen.findByRole("table", { name: "Summary" });
+    expect(summary).toHaveTextContent("Deployment #1");
+    const section = await screen.findByRole("region", { name: "Preflight" });
+    expect(section).toHaveTextContent(dep.imageReference);
+    expect(section).toHaveTextContent("alice/hello-gitops-preflight");
+    const tabs = screen.getByRole("navigation", { name: "Application sections" });
+    await userEvent.click(within(tabs).getByRole("link", { name: "Deployments" }));
+    const list = await screen.findByRole("region", { name: "Deployments" });
+    const rows = within(list).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent("Preflight");
+    expect(rows[0]).toHaveTextContent("#1");
+  });
+
+  it("shows a delivery step's Deployment in its details", async () => {
+    const run: DeliveryDetail = {
+      ...f.deliveryOk,
+      steps: [
+        { ...f.deliveryOk.steps[0], position: 3, id: "s3", type: "DEPLOY_PREFLIGHT", executor: "FLUX", build: null, deployment: dep,
+          externalRef: "kustomization:hello-preflight-deploy/hello-preflight" },
+        f.deliveryOk.steps[0],
+      ],
+    };
+    renderAt(`/applications/${f.appId}/deliveries/run-p`, fakeApi({ [`${app}/deliveries/run-p`]: run }));
+    const steps = await screen.findByRole("table", { name: "Delivery steps" });
+    const row = within(steps).getAllByRole("row")[1];
+    expect(row).toHaveTextContent("Deploy preflight");
+    await userEvent.click(within(row).getByRole("button", { name: "Show" }));
+    const facts = await screen.findByRole("table", { name: "Deployment #1" });
+    expect(facts).toHaveTextContent(dep.imageReference);
+    expect(screen.getByText("kustomization:hello-preflight-deploy/hello-preflight")).toBeInTheDocument();
+  });
+});

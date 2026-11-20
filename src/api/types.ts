@@ -23,12 +23,46 @@ export interface DeliveryRef {
 }
 
 // EnvironmentRef is an Application's environment (Production, Preflight):
-// its health, where the app answers and when its current version was
-// deployed. The Tenant CP does not return it yet (absent: not deployed).
+// its last Deployment's status, where the app answers and when its current
+// version was deployed (absent or null: never deployed).
 export interface EnvironmentRef {
   status: string;
   url?: string;
   deployedAt: Iso | null;
+  deployment?: DeploymentRef | null;
+}
+
+// DeploymentRef is a Deployment (Decision 0064): one image applied to one
+// environment, numbered within the Application. Three distinct revisions:
+// the source commit of the image, the GitOps commit whose update Task ran and
+// the GitOps commit it produced (what Flux applied).
+export interface DeploymentRef {
+  id: string;
+  number: number;
+  environment: string;
+  status: string;
+  deliveryRunId: string;
+  deliveryNumber: number;
+  sourceRevision: string;
+  head12: string;
+  image: Image | null;
+  imageReference: string;
+  gitopsRepository: string;
+  gitopsTaskRevision: string;
+  gitopsCommit?: string;
+  failureReason?: string;
+  failureMessage?: string;
+  startedAt: Iso;
+  completedAt: Iso | null;
+  durationSeconds: number | null;
+}
+
+// EnvironmentSummary is an environment's page: its last Deployment and the
+// last successful one (what runs there now).
+export interface EnvironmentSummary {
+  environment: string;
+  last: DeploymentRef | null;
+  current: DeploymentRef | null;
 }
 
 export interface ApplicationSummary {
@@ -65,6 +99,8 @@ export interface Overview {
   images: number;
   sections: string[];
   repositories: { role: string; fullName: string; url?: string }[];
+  // Present for an Application with the Preflight capability.
+  preflight?: EnvironmentSummary | null;
 }
 
 export interface Attempt {
@@ -164,6 +200,7 @@ export interface DeliveryStep {
   completedAt: Iso | null;
   durationSeconds: number | null;
   build: BuildRef | null;
+  deployment?: DeploymentRef | null;
 }
 
 export interface DeliveryDetail extends DeliverySummary {

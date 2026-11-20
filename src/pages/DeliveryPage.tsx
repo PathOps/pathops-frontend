@@ -17,6 +17,7 @@ import {
   newestFirst,
 } from "../components/ui";
 import { resource } from "../live/topics";
+import { DeploymentFacts } from "../sections/Deployments";
 import { AppCrumbs, PipelineRunRow, TaskRunList, useBuild } from "./BuildPage";
 
 // BuildTree is a step's build as one-row summaries, one under the other:
@@ -130,6 +131,15 @@ function Steps({ appId, steps }: { appId: string; steps: DeliveryStep[] }) {
                     <td colSpan={6} className="detail">
                       {s.build ? (
                         <BuildTree appId={appId} buildId={s.build.id} />
+                      ) : s.deployment ? (
+                        <>
+                          <DeploymentFacts appId={appId} d={s.deployment} />
+                          {s.externalRef && (
+                            <p>
+                              Execution <code>{s.externalRef}</code>
+                            </p>
+                          )}
+                        </>
                       ) : s.externalRef ? (
                         <p>
                           Execution <code>{s.externalRef}</code>
