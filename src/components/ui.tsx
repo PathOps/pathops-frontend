@@ -171,7 +171,7 @@ export function ErrorBox({ error }: { error: Error }) {
         ? "Not found, or not yours."
         : error.code === "tekton_unavailable"
           ? "Tekton could not be read right now."
-          : `The Tenant Control Plane answered ${error.status} (${error.code}).`;
+          : `PathOps answered ${error.status} (${error.code}).`;
   }
   return (
     <p className="error" role="alert">

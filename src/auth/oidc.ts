@@ -100,14 +100,14 @@ export function redirectUri(): string {
 export async function loadConfig(fetchFn: typeof fetch = fetch): Promise<OidcConfig> {
   if (config) return config;
   const d = await fetchFn("/.well-known/pathops");
-  if (!d.ok) throw new AuthError(`the Tenant CP's discovery answered ${d.status}`);
+  if (!d.ok) throw new AuthError(`PathOps sign-in is unavailable (discovery answered ${d.status})`);
   const doc = await d.json();
-  if (!doc.ui?.clientId) throw new AuthError("this Cell has no PathOps UI client");
+  if (!doc.ui?.clientId) throw new AuthError("PathOps sign-in is not configured for the web UI");
   const issuer: string = doc.oidc.issuer;
   const o = await fetchFn(issuer + "/.well-known/openid-configuration");
-  if (!o.ok) throw new AuthError(`the Cell's Dex discovery answered ${o.status}`);
+  if (!o.ok) throw new AuthError(`the identity provider is unavailable (discovery answered ${o.status})`);
   const meta = await o.json();
-  if (meta.issuer !== issuer) throw new AuthError("the Cell's Dex names another issuer");
+  if (meta.issuer !== issuer) throw new AuthError("the identity provider names another issuer");
   config = {
     issuer,
     clientId: doc.ui.clientId,
@@ -188,7 +188,7 @@ export async function completeSignIn(search: string, fetchFn: typeof fetch = fet
   const raw = sessionStorage.getItem(PENDING_KEY);
   sessionStorage.removeItem(PENDING_KEY);
   const q = new URLSearchParams(search);
-  if (q.get("error")) throw new AuthError(`Dex refused the sign-in: ${q.get("error")}`);
+  if (q.get("error")) throw new AuthError(`the identity provider refused the sign-in: ${q.get("error")}`);
   if (!raw) throw new AuthError("no sign-in in progress");
   const pending = JSON.parse(raw) as Pending;
   const code = q.get("code");
