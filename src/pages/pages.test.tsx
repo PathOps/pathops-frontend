@@ -5,7 +5,8 @@ import { ApiError } from "../api/client";
 import { authorizationUrl, completeSignIn, loadConfig, resetForTests, signedIn } from "../auth/oidc";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../App";
-import { Duration } from "../components/ui";
+import { Duration, EnvironmentLabel } from "../components/ui";
+import { ValidationsTable } from "../sections/Validations";
 import type { DeliveryDetail } from "../api/types";
 import { fakeApi, renderAt } from "../test/render";
 import * as f from "../test/fixtures";
@@ -21,6 +22,7 @@ const all = {
   [`${app}/deliveries/run-bad`]: f.deliveryBad,
   [`${app}/images`]: f.images,
   [`${app}/builds`]: { builds: [] },
+  [`${app}/deployments`]: { deployments: [], nextCursor: null, previousCursor: null },
   "/api/v1/builds/build-ok": f.buildOk,
   "/api/v1/builds/build-ok/tasks": f.tasksOk,
   "/api/v1/builds/build-ok/tasks/build-build-ok-build-image/logs?step=checkout": { ...f.buildLog, step: "checkout", content: "cloned" },
@@ -90,6 +92,7 @@ describe("Application", () => {
       "Preflight",
       "Delivery",
       "Validations",
+      "Deployments",
       "Images",
       "Builds",
       "Repositories",
@@ -105,6 +108,7 @@ describe("Application", () => {
       ["Production", "The production environment has not been created yet."],
       ["Preflight", "The preflight environment has not been created yet."],
       ["Validations", "No validations yet."],
+      ["Deployments", "Nothing here yet."],
     ]) {
       await userEvent.click(within(tabs).getByRole("link", { name: planned }));
       const section = await screen.findByRole("region", { name: planned });
@@ -164,7 +168,7 @@ describe("Application", () => {
   it("lists builds by number with their delivery", async () => {
     renderAt(`/applications/${f.appId}/builds`, fakeApi({ ...all, [`${app}/builds`]: { builds: [f.buildBad, f.buildOk] } }));
     const links = await screen.findAllByRole("link", { name: "#2" });
-    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["#", "Commit", "Status", "Delivery", "Started", "Duration"]);
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["#", "Commit", "Status", "Started", "Duration", "Delivery"]);
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       `/applications/${f.appId}/builds/build-bad`,
       `/applications/${f.appId}/deliveries/run-bad`,
@@ -752,24 +756,7 @@ describe("Signed out", () => {
 });
 
 describe("Preflight (Decision 0064)", () => {
-  const dep = {
-    id: "dep-1",
-    number: 1,
-    environment: "PREFLIGHT",
-    status: "SUCCEEDED",
-    deliveryRunId: "run-ok",
-    deliveryNumber: 1,
-    sourceRevision: f.okRev,
-    head12: f.okRev.slice(0, 12),
-    image: null,
-    imageReference: `zot-test.example/apps/${f.appId}:${f.okRev.slice(0, 12)}@${f.digest}`,
-    gitopsRepository: "alice/hello-gitops-preflight",
-    gitopsTaskRevision: "1111111111111111111111111111111111111111",
-    gitopsCommit: "2222222222222222222222222222222222222222",
-    startedAt: "2026-11-20T10:00:00Z",
-    completedAt: "2026-11-20T10:02:00Z",
-    durationSeconds: 120,
-  };
+  const dep = f.deployment;
   const withPreflight = {
     ...all,
     [`${app}/overview`]: {
@@ -813,5 +800,144 @@ describe("Preflight (Decision 0064)", () => {
     const facts = await screen.findByRole("table", { name: "Deployment #1" });
     expect(facts).toHaveTextContent(dep.imageReference);
     expect(screen.getByText("kustomization:hello-preflight-deploy/hello-preflight")).toBeInTheDocument();
+  });
+});
+
+describe("Deployments", () => {
+  const failed = {
+    ...f.deployment,
+    id: "dep-2",
+    number: 2,
+    status: "FAILED",
+    deliveryRunId: "run-bad",
+    deliveryNumber: 2,
+    sourceRevision: "bbbbbbbbbbbbcccccccccccccccccccccccccccc",
+    head12: "bbbbbbbbbbbb",
+    gitopsCommit: undefined,
+    failureReason: "FLUX_RECONCILIATION_FAILED",
+    failureMessage: "Ready=False",
+    startedAt: "2026-11-20T11:00:00Z",
+    completedAt: "2026-11-20T11:05:00Z",
+    durationSeconds: 300,
+  };
+  const deps = (from: number, to: number) => {
+    const out = [];
+    for (let n = from; n >= to; n--) out.push({ ...f.deployment, id: `dep-${n}`, number: n, deliveryRunId: `run-${n}`, deliveryNumber: n });
+    return out;
+  };
+  const rows = (region: HTMLElement) => within(region).getAllByRole("row").slice(1);
+
+  it("lists Deployments newest first: # Commit Environment Status Started Duration Delivery", async () => {
+    const api = fakeApi({ ...all, [`${app}/deployments`]: { deployments: [failed, f.deployment], nextCursor: null, previousCursor: null } });
+    renderAt(`/applications/${f.appId}/deployments`, api);
+    const list = await screen.findByRole("region", { name: "Deployments" });
+    await waitFor(() => expect(rows(list)).toHaveLength(2));
+    expect(within(list).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "#",
+      "Commit",
+      "Environment",
+      "Status",
+      "Started",
+      "Duration",
+      "Delivery",
+    ]);
+    const [first, second] = rows(list);
+    // As the Tenant CP orders them: #2 (the newest) first.
+    expect(within(first).getAllByRole("cell")[0]).toHaveTextContent(/^2$/);
+    expect(within(second).getAllByRole("cell")[0]).toHaveTextContent(/^1$/);
+    // # is text: a Deployment has no page of its own.
+    expect(within(within(first).getAllByRole("cell")[0]).queryByRole("link")).not.toBeInTheDocument();
+    // The failed one.
+    expect(within(first).getByText("Failed")).toHaveClass("status-error");
+    expect(within(first).getByText("bbbbbbbbbbbb")).toHaveAttribute("title", failed.sourceRevision);
+    expect(within(first).getByText("Preflight")).toHaveClass("environment", "environment-preflight");
+    expect(within(first).getByRole("link", { name: "#2" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-bad`);
+    expect(within(first).getAllByRole("cell")[5]).toHaveTextContent("5m 00s");
+    // The succeeded one: the 12-character commit, its delivery.
+    expect(within(second).getByText("Succeeded")).toHaveClass("status-ok");
+    expect(within(second).getByText(f.okRev.slice(0, 12))).toHaveAttribute("title", f.okRev);
+    expect(within(second).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+  });
+
+  it("is a tab between Validations and Images; empty, it says so", async () => {
+    renderAt(`/applications/${f.appId}/deployments`, fakeApi(all));
+    const tabs = await screen.findByRole("navigation", { name: "Application sections" });
+    const names = within(tabs).getAllByRole("link").map((l) => l.textContent);
+    expect(names.slice(names.indexOf("Validations"), names.indexOf("Validations") + 3)).toEqual(["Validations", "Deployments", "Images"]);
+    const list = await screen.findByRole("region", { name: "Deployments" });
+    expect(await within(list).findByText("Nothing here yet.")).toBeInTheDocument();
+    expect(within(list).queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("pages Deployments 10 at a time from the Tenant CP: Previous and Next", async () => {
+    const api = fakeApi({
+      ...all,
+      [`${app}/deployments`]: { deployments: deps(25, 16), nextCursor: "p-16", previousCursor: null },
+      [`${app}/deployments?cursor=p-16`]: { deployments: deps(15, 6), nextCursor: "p-6", previousCursor: "p-15" },
+    });
+    renderAt(`/applications/${f.appId}/deployments`, api);
+    const pager = await screen.findByRole("navigation", { name: "Deployment pages" });
+    expect(screen.getByRole("region", { name: "Deployments" }).querySelectorAll("tbody tr")).toHaveLength(10);
+    expect(within(pager).getByText("← Previous")).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(within(pager).getByRole("link", { name: "Next →" }));
+    await waitFor(() => expect(api.calls).toContain(`${app}/deployments?cursor=p-16`));
+    await waitFor(() => expect(screen.getByRole("link", { name: "#15" })).toBeInTheDocument());
+    const next = screen.getByRole("navigation", { name: "Deployment pages" });
+    expect(within(next).getByRole("link", { name: "← Previous" })).toHaveAttribute("href", `/applications/${f.appId}/deployments?cursor=p-15`);
+    expect(within(next).getByRole("link", { name: "Next →" })).toHaveAttribute("href", `/applications/${f.appId}/deployments?cursor=p-6`);
+  });
+});
+
+describe("Environment", () => {
+  it("is semibold words in the environment's own class: Preflight and Production", () => {
+    render(
+      <>
+        <EnvironmentLabel environment="PREFLIGHT" />
+        <EnvironmentLabel environment="PRODUCTION" />
+      </>,
+    );
+    expect(screen.getByText("Preflight")).toHaveClass("environment", "environment-preflight");
+    expect(screen.getByText("Production")).toHaveClass("environment", "environment-production");
+    // Never a status's classes.
+    expect(screen.getByText("Production").className).not.toMatch(/status-/);
+  });
+});
+
+describe("Validations table", () => {
+  it("is # Commit Environment Status Tests Started Duration Delivery, its environment the same label as Deployments'", () => {
+    const v = {
+      id: "v-1",
+      number: 1,
+      sourceRevision: f.okRev,
+      environment: "PRODUCTION",
+      status: "SUCCEEDED",
+      tests: { passed: 12, total: 12 },
+      startedAt: "2026-11-20T10:00:00Z",
+      durationSeconds: 42,
+      deliveryRunId: "run-ok",
+      deliveryNumber: 1,
+    };
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ValidationsTable appId={f.appId} validations={[v, { ...v, id: "v-2", number: 2, environment: "PREFLIGHT", tests: null }]} />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "#",
+      "Commit",
+      "Environment",
+      "Status",
+      "Tests",
+      "Started",
+      "Duration",
+      "Delivery",
+    ]);
+    const [first, second] = screen.getAllByRole("row").slice(1);
+    expect(within(first).getByText("Production")).toHaveClass("environment", "environment-production");
+    expect(within(first).getByText("12/12")).toBeInTheDocument();
+    expect(within(first).getByText(f.okRev.slice(0, 12))).toBeInTheDocument();
+    expect(within(first).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    expect(within(second).getByText("Preflight")).toHaveClass("environment", "environment-preflight");
   });
 });

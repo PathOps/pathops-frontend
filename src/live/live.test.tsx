@@ -209,6 +209,46 @@ describe("Live updates", () => {
     expect(count(api, `${app}/builds`)).toBe(0);
   });
 
+  it("Deployments follow their delivery runs' changes without a Refresh: Running becomes Succeeded or Failed", async () => {
+    const source = fakeSource();
+    const t = table();
+    const running = { ...f.deployment, status: "RUNNING", completedAt: null, durationSeconds: 30 };
+    t[`${app}/deployments`] = { deployments: [running], previousCursor: null, nextCursor: null };
+    const api = fakeApi(t);
+    renderLive(`/applications/${f.appId}/deployments`, api, source);
+    const list = await screen.findByRole("region", { name: "Deployments" });
+    expect(await within(list).findByText("Running")).toBeInTheDocument();
+    const c = await connected(source);
+    const before = count(api, `${app}/deployments`);
+    act(() => c.send(ev("BUILD_CHANGED", f.appId, "build-ok")));
+    act(() => c.send(ev("DELIVERY_CHANGED", otherApp, "run-ok")));
+    expect(count(api, `${app}/deployments`)).toBe(before);
+    t[`${app}/deployments`] = { deployments: [f.deployment], previousCursor: null, nextCursor: null };
+    act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
+    expect(await within(list).findByText("Succeeded")).toBeInTheDocument();
+    t[`${app}/deployments`] = { deployments: [{ ...f.deployment, status: "FAILED" }], previousCursor: null, nextCursor: null };
+    act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
+    expect(await within(list).findByText("Failed")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+  });
+
+  it("an older Deployments page keeps its place: only its own delivery runs' changes refetch it", async () => {
+    const source = fakeSource();
+    const t = table();
+    const page = `${app}/deployments?cursor=older`;
+    t[page] = { deployments: [f.deployment], previousCursor: "newer", nextCursor: null };
+    const api = fakeApi(t);
+    renderLive(`/applications/${f.appId}/deployments?cursor=older`, api, source);
+    await screen.findByRole("navigation", { name: "Deployment pages" });
+    const c = await connected(source);
+    const before = count(api, page);
+    act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-new")));
+    expect(count(api, page)).toBe(before);
+    act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
+    await waitFor(() => expect(count(api, page)).toBe(before + 1));
+    expect(count(api, `${app}/deployments`)).toBe(0);
+  });
+
   it("Images: the newest page shows a new image; an older page only its own builds' changes", async () => {
     const source = fakeSource();
     const t = table();

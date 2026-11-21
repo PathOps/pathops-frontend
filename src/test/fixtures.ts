@@ -4,6 +4,7 @@ import type {
   BuildDetail,
   DeliveryDetail,
   DeliverySummary,
+  DeploymentRef,
   ImageEntry,
   Log,
   Overview,
@@ -302,3 +303,23 @@ export const tasksBad: Tasks = {
 export function logOf(taskRun: string, step: string, content: string): Log {
   return { buildId: "build-bad", taskRun, step, content, truncated: false, limitBytes: 262144, tailLines: 4000 };
 }
+
+// deployment is Deployment #1: Preflight, succeeded, of delivery #1.
+export const deployment: DeploymentRef = {
+  id: "dep-1",
+  number: 1,
+  environment: "PREFLIGHT",
+  status: "SUCCEEDED",
+  deliveryRunId: "run-ok",
+  deliveryNumber: 1,
+  sourceRevision: okRev,
+  head12: okRev.slice(0, 12),
+  image: null,
+  imageReference: `zot-test.example/apps/${appId}:${okRev.slice(0, 12)}@${digest}`,
+  gitopsRepository: "alice/hello-gitops-preflight",
+  gitopsTaskRevision: "1111111111111111111111111111111111111111",
+  gitopsCommit: "2222222222222222222222222222222222222222",
+  startedAt: "2026-11-20T10:00:00Z",
+  completedAt: "2026-11-20T10:02:00Z",
+  durationSeconds: 120,
+};

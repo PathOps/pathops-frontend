@@ -63,7 +63,7 @@ disconnected** (a reload is the fallback).
 
 Long lists are paged by the Tenant Control Plane (keyset cursors), never cut
 in the browser: the Inbox 25 a page (**Newer** / **Older**), Delivery Runs,
-Builds and Images 10 a page (**Previous** / **Next**), newest first. The page is
+Deployments, Builds and Images 10 a page (**Previous** / **Next**), newest first. The page is
 `?cursor=` in the URL, so a refresh, a copied link and Back keep it; an end
 of the list shows its control disabled, a list of one page none.
 
@@ -73,14 +73,28 @@ of the list shows its control disabled, a list of one page none.
   Control Plane returns environments), last delivery (`#N` and status),
   provisioning and creation time.
 - **Application**: the Application ID, a summary (technology, template link,
-  last delivery, provisioning; Production and Preflight "not created yet")
-  and the tabs Production, Preflight, Delivery, Validations, Images, Builds,
-  Repositories, Provisioning. Images copy each image's pinned reference
-  (`repository@digest`, what a manifest uses) beside its tag. Production and
-  Preflight say their environment has not been created yet, Validations that
-  there are none, until their slices ship (an Application whose provisioning
-  stopped half-way has none either); the others appear when the Tenant
-  Control Plane names them (`overview.sections`).
+  last delivery, provisioning; Production "not created yet"; Preflight its
+  Deployment `#N`, status and delivery, "not deployed yet" before the first,
+  "not created yet" without Preflight) and the tabs Production, Preflight,
+  Delivery, Validations, Deployments, Images, Builds, Repositories,
+  Provisioning. Images copy each image's pinned reference
+  (`repository@digest`, what a manifest uses) beside its tag. Production
+  says its environment has not been created yet, Validations that there are
+  none (the Tenant Control Plane runs no validations yet), Preflight the
+  same without Preflight; Deployments is always there, empty before the
+  first; the others appear when the Tenant Control Plane names them
+  (`overview.sections`).
+- **Tables**: Deployments `# | Commit | Environment | Status | Started |
+  Duration | Delivery`, Builds `# | Commit | Status | Started | Duration |
+  Delivery` (Validations' table, for when they exist: `# | Commit |
+  Environment | Status | Tests | Started | Duration | Delivery`). Commit is
+  the source commit's first 12 characters, Delivery the delivery run's `#N`
+  linked. An environment is semibold words in its own color, the same
+  everywhere (`EnvironmentLabel`, classes `environment-preflight`,
+  `environment-production`): Preflight a soft gold, Production teal, never a
+  status's green or red or a link's blue, each a theme token for light and
+  dark (WCAG AA). A Deployment's `#` is text: it has no page of its own
+  (its delivery run's page shows it).
 - **Delivery run**: its facts (commit, source, times, error), its DeliverySteps
   latest first (a new step type appears without a UI change), and the OCI
   image (or "No image"). A step's details are its build tree, one

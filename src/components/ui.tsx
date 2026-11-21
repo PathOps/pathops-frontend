@@ -35,6 +35,19 @@ export function Status({ status, label }: { status: string | undefined; label?: 
   );
 }
 
+// EnvironmentLabel is an environment (PREFLIGHT, PRODUCTION) as semibold
+// words in that environment's color, the same wherever one is shown. Its
+// colors are not a status's: no green or red (success, failure), no blue
+// (links).
+export function EnvironmentLabel({ environment }: { environment: string }) {
+  const kind = environment.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return (
+    <span className={`environment environment-${kind}`} data-environment={environment}>
+      {humanize(environment)}
+    </span>
+  );
+}
+
 // newestFirst orders a sequence the Tenant CP returns in time order (steps,
 // attempts, TaskRuns) latest first: what happened last is on top.
 export function newestFirst<T>(xs: T[]): T[] {

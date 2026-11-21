@@ -23,9 +23,9 @@ export function Builds({ appId }: { appId: string }) {
                   <th>#</th>
                   <th>Commit</th>
                   <th>Status</th>
-                  <th>Delivery</th>
                   <th>Started</th>
                   <th>Duration</th>
+                  <th>Delivery</th>
                 </tr>
               </thead>
               <tbody>
@@ -41,13 +41,13 @@ export function Builds({ appId }: { appId: string }) {
                       <Status status={x.status} />
                     </td>
                     <td>
-                      <RunLink appId={appId} id={x.deliveryRunId} number={x.deliveryNumber} />
-                    </td>
-                    <td>
                       <Time at={x.startedAt ?? x.createdAt} />
                     </td>
                     <td>
                       <Duration seconds={x.durationSeconds} />
+                    </td>
+                    <td>
+                      <RunLink appId={appId} id={x.deliveryRunId} number={x.deliveryNumber} />
                     </td>
                   </tr>
                 ))}

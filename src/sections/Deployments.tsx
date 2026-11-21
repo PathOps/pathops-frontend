@@ -1,6 +1,6 @@
 import type { DeploymentRef, Paged } from "../api/types";
 import { useResource, type Resource } from "../api/useResource";
-import { Copy, Duration, Fact, Facts, Head12, Loaded, Pager, RunLink, Short, Status, Time, humanize, usePageCursor, withCursor } from "../components/ui";
+import { Copy, Duration, EnvironmentLabel, Fact, Facts, Head12, Loaded, Pager, RunLink, Short, Status, Time, humanize, usePageCursor, withCursor } from "../components/ui";
 import { applicationList } from "../live/topics";
 
 // DeploymentFacts are one Deployment's identity: the exact image it applied
@@ -9,7 +9,7 @@ export function DeploymentFacts({ appId, d }: { appId: string; d: DeploymentRef 
   return (
     <Facts label={`Deployment #${d.number}`}>
       <Fact label="Deployment">
-        #{d.number} — {humanize(d.environment)} — <Status status={d.status} />
+        #{d.number} — <EnvironmentLabel environment={d.environment} /> — <Status status={d.status} />
       </Fact>
       <Fact label="Delivery">
         <RunLink appId={appId} id={d.deliveryRunId} number={d.deliveryNumber} />
@@ -54,12 +54,18 @@ export function DeploymentFacts({ appId, d }: { appId: string; d: DeploymentRef 
 }
 
 // Deployments: 10 per page, newest first, every environment (Decision 0064
-// §12); live with the Application's deliveries.
+// §12). Live like Builds: a Deployment's change is its delivery run's
+// (DELIVERY_CHANGED); the newest page also shows new ones, an older page only
+// its own rows' changes. # is text: a Deployment has no page of its own (its
+// delivery run's page shows it).
 export function Deployments({ appId }: { appId: string }) {
   const cursor = usePageCursor();
   const r: Resource<Paged & { deployments: DeploymentRef[] }> = useResource(
     withCursor(`/api/v1/applications/${appId}/deployments`, cursor),
-    { live: (e) => applicationList("DELIVERY_CHANGED", appId, true, [])(e) },
+    {
+      live: (e) =>
+        applicationList("DELIVERY_CHANGED", appId, !r.data?.previousCursor, r.data?.deployments.map((x) => x.deliveryRunId) ?? [])(e),
+    },
   );
   return (
     <>
@@ -72,35 +78,35 @@ export function Deployments({ appId }: { appId: string }) {
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>Commit</th>
                   <th>Environment</th>
                   <th>Status</th>
-                  <th>Commit</th>
-                  <th>GitOps commit</th>
-                  <th>Delivery</th>
                   <th>Started</th>
                   <th>Duration</th>
+                  <th>Delivery</th>
                 </tr>
               </thead>
               <tbody>
                 {d.deployments.map((x) => (
                   <tr key={x.id}>
                     <td>{x.number}</td>
-                    <td>{humanize(x.environment)}</td>
-                    <td>
-                      <Status status={x.status} />
-                    </td>
                     <td>
                       <Head12 revision={x.sourceRevision} head12={x.head12} />
                     </td>
-                    <td>{x.gitopsCommit ? <Short text={x.gitopsCommit} /> : <span className="muted">—</span>}</td>
                     <td>
-                      <RunLink appId={appId} id={x.deliveryRunId} number={x.deliveryNumber} />
+                      <EnvironmentLabel environment={x.environment} />
+                    </td>
+                    <td>
+                      <Status status={x.status} />
                     </td>
                     <td>
                       <Time at={x.startedAt} />
                     </td>
                     <td>
                       <Duration seconds={x.durationSeconds} />
+                    </td>
+                    <td>
+                      <RunLink appId={appId} id={x.deliveryRunId} number={x.deliveryNumber} />
                     </td>
                   </tr>
                 ))}

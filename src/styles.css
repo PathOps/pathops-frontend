@@ -15,6 +15,8 @@
   --ok: #16803c;
   --error: #c62828;
   --warning: #946200;
+  --env-preflight: #7a6500;
+  --env-production: #00727a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -31,6 +33,8 @@
     --ok: #67d391;
     --error: #ff8585;
     --warning: #f4c16c;
+  --env-preflight: #d9c26a;
+  --env-production: #5ccfd6;
   }
 }
 :root[data-theme="dark"] {
@@ -47,6 +51,8 @@
   --ok: #67d391;
   --error: #ff8585;
   --warning: #f4c16c;
+  --env-preflight: #d9c26a;
+  --env-production: #5ccfd6;
 }
 
 html,
@@ -178,6 +184,16 @@ small,
 .status-warning,
 .status-running {
   color: var(--warning);
+}
+/* An environment: semibold words in its own color, never a status's. */
+.environment {
+  font-weight: 600;
+}
+.environment-preflight {
+  color: var(--env-preflight);
+}
+.environment-production {
+  color: var(--env-production);
 }
 .scroll {
   overflow-x: auto;

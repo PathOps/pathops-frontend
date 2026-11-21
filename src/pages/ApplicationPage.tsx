@@ -8,6 +8,7 @@ import { Builds } from "../sections/Builds";
 import { Deliveries } from "../sections/Deliveries";
 import { Deployments } from "../sections/Deployments";
 import { Preflight } from "../sections/Preflight";
+import { Validations } from "../sections/Validations";
 import { Images } from "../sections/Images";
 import { ProvisioningSection } from "../sections/Provisioning";
 import { RepositoriesSection } from "../sections/Repositories";
@@ -15,9 +16,9 @@ import { technologyLine } from "./ApplicationsPage";
 
 interface Section {
   title: string;
-  // planned: always shown, empty until its slice ships (the Tenant CP has no
-  // environment or validation yet); else the Tenant CP names it in
-  // overview.sections when it exists.
+  // planned: always shown, empty until there is something in it (no
+  // production or validation yet, no Deployment before Preflight); else the
+  // Tenant CP names it in overview.sections when it exists.
   planned?: boolean;
   render: (appId: string, o: Overview) => JSX.Element;
 }
@@ -50,18 +51,8 @@ const sections: Record<string, Section> = {
       ),
   },
   deliveries: { title: "Delivery", render: (id) => <Deliveries appId={id} /> },
-  deployments: { title: "Deployments", render: (id) => <Deployments appId={id} /> },
-  validations: {
-    title: "Validations",
-    planned: true,
-    render: () => (
-      <NotYet
-        title="Validations"
-        what="Acceptance and regression test executions for the application contract."
-        state="No validations yet."
-      />
-    ),
-  },
+  validations: { title: "Validations", planned: true, render: () => <Validations /> },
+  deployments: { title: "Deployments", planned: true, render: (id) => <Deployments appId={id} /> },
   images: { title: "Images", render: (id) => <Images appId={id} /> },
   builds: { title: "Builds", render: (id) => <Builds appId={id} /> },
   repositories: { title: "Repositories", render: (id) => <RepositoriesSection appId={id} /> },
