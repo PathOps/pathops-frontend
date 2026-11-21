@@ -29,6 +29,12 @@ export function resource(type: "BUILD_CHANGED" | "DELIVERY_CHANGED", id: string)
   return (e) => e.type === type && e.resourceId === id;
 }
 
+// One Deployment: its delivery run's changes (a Deployment changes with its
+// run, DELIVERY_CHANGED); before it is read, any of its Application's runs.
+export function deployment(appId: string, runId: string | undefined): Topic {
+  return (e) => e.type === "DELIVERY_CHANGED" && e.applicationId === appId && (runId === undefined || e.resourceId === runId);
+}
+
 // The DeliveryRuns of one Application (its overview: every build change
 // changes its run too, so one type is enough).
 export function deliveries(appId: string): Topic {

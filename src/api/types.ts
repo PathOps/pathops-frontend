@@ -59,10 +59,19 @@ export interface DeploymentRef {
 
 // EnvironmentSummary is an environment's page: its last Deployment and the
 // last successful one (what runs there now).
+// url is where the deployed app answers, when PathOps exposes the
+// environment (absent: not exposed, no link).
 export interface EnvironmentSummary {
   environment: string;
   last: DeploymentRef | null;
   current: DeploymentRef | null;
+  url?: string;
+}
+
+// DeploymentDetail is one Deployment's page: the Deployment and the Build
+// that produced its image.
+export interface DeploymentDetail extends DeploymentRef {
+  build: { id: string; number: number; status: string } | null;
 }
 
 export interface ApplicationSummary {

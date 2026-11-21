@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import type { Resource } from "../api/useResource";
+import type { EnvironmentStatus } from "../environment";
 
 const statusClass: Record<string, string> = {
   SUCCEEDED: "ok",
@@ -10,6 +11,7 @@ const statusClass: Record<string, string> = {
   True: "ok",
   HEALTHY: "ok",
   FAILED: "error",
+  UNSTABLE: "error",
   DEGRADED: "error",
   BLOCKED: "error",
   BLOCKED_CONFLICT: "error",
@@ -19,6 +21,9 @@ const statusClass: Record<string, string> = {
   Unknown: "running",
   running: "running",
   PROGRESSING: "running",
+  IN_PROGRESS: "running",
+  DEPLOYING: "running",
+  VALIDATING: "running",
   PENDING: "warning",
   WAITING_FOR_AUTHORIZATION: "warning",
   AUTHORIZATION_REQUIRED: "warning",
@@ -35,16 +40,21 @@ export function Status({ status, label }: { status: string | undefined; label?: 
   );
 }
 
-// EnvironmentLabel is an environment (PREFLIGHT, PRODUCTION) as semibold
-// words in that environment's color, the same wherever one is shown. Its
-// colors are not a status's: no green or red (success, failure), no blue
-// (links).
+// EnvironmentLabel is an environment (PREFLIGHT, PRODUCTION) as plain words,
+// the same wherever one is shown: color is for statuses.
 export function EnvironmentLabel({ environment }: { environment: string }) {
-  const kind = environment.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return <span data-environment={environment}>{humanize(environment)}</span>;
+}
+
+// EnvironmentState is an environment's derived state and how long it has
+// been in it: "Healthy — 2h", "Deploying — 30s"; never deployed, only "Not
+// deployed". The Applications list and an Application's header show it alike.
+export function EnvironmentState({ status }: { status: EnvironmentStatus }) {
+  if (status.state === "NOT_DEPLOYED") return <span className="muted">Not deployed</span>;
   return (
-    <span className={`environment environment-${kind}`} data-environment={environment}>
-      {humanize(environment)}
-    </span>
+    <>
+      <Status status={status.state} /> — <Ago at={status.since} />
+    </>
   );
 }
 
@@ -88,11 +98,24 @@ export function Time({ at }: { at: string | null | undefined }) {
   );
 }
 
-// Ago is how long ago, abbreviated (3s, 5m, 1h, 3d); the full time on hover.
-export function Ago({ at, now = Date.now() }: { at: string | null | undefined; now?: number }) {
+// useTick renders its component again every interval, so a relative time
+// stays current without a reload.
+function useTick(ms: number) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+}
+
+// Ago is how long ago, abbreviated (3s, 5m, 1h, 3d); relative, as a phrase
+// ("just now", "5m ago", "1h ago"). The full time on hover.
+export function Ago({ at, now, relative = false }: { at: string | null | undefined; now?: number; relative?: boolean }) {
+  useTick(30000);
   if (!at) return <span className="muted">—</span>;
-  const s = Math.max(0, Math.floor((now - Date.parse(at)) / 1000));
-  const text = s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
+  const s = Math.max(0, Math.floor(((now ?? Date.now()) - Date.parse(at)) / 1000));
+  const short = s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
+  const text = !relative ? short : s < 60 ? "just now" : `${short} ago`;
   return (
     <time dateTime={at} title={new Date(at).toISOString()}>
       {text}
@@ -170,6 +193,11 @@ export function ExternalLink({ href, children }: { href: string; children: React
 // RunLink is a DeliveryRun as #N; BuildLink a Build as #N.
 export function RunLink({ appId, id, number }: { appId: string; id: string; number: number }) {
   return <Link to={`/applications/${appId}/deliveries/${id}`}>#{number}</Link>;
+}
+
+// DeploymentLink is a Deployment as #N, to its page.
+export function DeploymentLink({ appId, id, number }: { appId: string; id: string; number: number }) {
+  return <Link to={`/applications/${appId}/deployments/${id}`}>#{number}</Link>;
 }
 
 export function BuildLink({ appId, id, number }: { appId: string; id: string; number: number }) {

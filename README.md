@@ -68,33 +68,48 @@ Deployments, Builds and Images 10 a page (**Previous** / **Next**), newest first
 of the list shows its control disabled, a list of one page none.
 
 - **Applications**: a table of the user's Applications: Production and
-  Preflight (health, an "Open app" link and how long ago the current version
-  was deployed, as `3s`, `5m`, `1h`, `3d`; "not deployed" until the Tenant
-  Control Plane returns environments), last delivery (`#N` and status),
-  provisioning and creation time.
+  Preflight (the environment's state and how long it has been in it, as
+  `Healthy — 2h`, the same as an Application's header; "Not deployed" before
+  the first Deployment), last delivery (`#N` and status), provisioning and
+  creation time.
 - **Application**: the Application ID, a summary (technology, template link,
   last delivery, provisioning; Production "not created yet"; Preflight its
-  Deployment `#N`, status and delivery, "not deployed yet" before the first,
-  "not created yet" without Preflight) and the tabs Production, Preflight,
-  Delivery, Validations, Deployments, Images, Builds, Repositories,
-  Provisioning. Images copy each image's pinned reference
-  (`repository@digest`, what a manifest uses) beside its tag. Production
-  says its environment has not been created yet, Validations that there are
-  none (the Tenant Control Plane runs no validations yet), Preflight the
-  same without Preflight; Deployments is always there, empty before the
+  state, `Healthy — 2h`, never a Deployment or Delivery number; "not created
+  yet" without Preflight) and the tabs Production, Preflight, Delivery,
+  Validations, Deployments, Images, Builds, Repositories, Provisioning.
+  Production says its environment has not been created yet, Validations that
+  there are none (the Tenant Control Plane runs no validations yet), Preflight
+  the same without Preflight; Deployments is always there, empty before the
   first; the others appear when the Tenant Control Plane names them
   (`overview.sections`).
+- **Preflight**: how the environment is now, not how it was deployed: Status
+  (its state), Commit (its last Deployment's), Last deployed (its current
+  version's, relative: `just now`, `2m ago`, `1h ago`, `1d ago`), Tests ("Not
+  configured" until Validation execution exists) and **Open App ↗** (a new
+  tab) when the Tenant Control Plane gives the environment's URL; none today,
+  so no link.
+- **Environment state** (`src/environment.ts`, `deriveEnvironmentStatus`),
+  derived from the read model, never stored, and not a Deployment's status:
+  no Deployment, Not deployed; the last Deployment in progress, Deploying;
+  failed, Unstable; succeeded, Healthy while no validations are configured
+  (a temporary rule: with Validation execution, Validating while they run,
+  Unstable when they fail, Healthy when they succeed). Deployment #5 may be
+  Succeeded while its environment is Unstable.
 - **Tables**: Deployments `# | Commit | Environment | Status | Started |
-  Duration | Delivery`, Builds `# | Commit | Status | Started | Duration |
-  Delivery` (Validations' table, for when they exist: `# | Commit |
-  Environment | Status | Tests | Started | Duration | Delivery`). Commit is
-  the source commit's first 12 characters, Delivery the delivery run's `#N`
-  linked. An environment is semibold words in its own color, the same
-  everywhere (`EnvironmentLabel`, classes `environment-preflight`,
-  `environment-production`): Preflight a soft gold, Production teal, never a
-  status's green or red or a link's blue, each a theme token for light and
-  dark (WCAG AA). A Deployment's `#` is text: it has no page of its own
-  (its delivery run's page shows it).
+  Duration | Delivery` (Status is the Deployment's own: In progress,
+  Succeeded, Failed), Builds `# | Commit | Status | Started | Duration |
+  Delivery`, Images `Tag | Environment | Digest | Build | Created`
+  (Validations' table, for when they exist: `# | Commit | Environment |
+  Status | Tests | Started | Duration | Delivery`). Commit is the source
+  commit's first 12 characters, Delivery the delivery run's `#N` linked, a
+  Deployment's `#N` its page. An image's Environment is where it runs now:
+  `Preflight`, `Production`, `Preflight, Production` (a promotion reuses the
+  artifact) or `—`, from each environment's current Deployment, never
+  history. An environment is plain words: color is for statuses. Images copy
+  each image's pinned reference (`repository@digest`) beside its tag.
+- **Deployment**: `Deployment #N`: environment, status (and its error),
+  commit, image (its digest, a copy of the reference and the Build that
+  produced it), delivery, start, duration and GitOps commit.
 - **Delivery run**: its facts (commit, source, times, error), its DeliverySteps
   latest first (a new step type appears without a UI change), and the OCI
   image (or "No image"). A step's details are its build tree, one

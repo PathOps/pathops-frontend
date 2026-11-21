@@ -1,6 +1,6 @@
 import type { DeploymentRef, Paged } from "../api/types";
 import { useResource, type Resource } from "../api/useResource";
-import { Copy, Duration, EnvironmentLabel, Fact, Facts, Head12, Loaded, Pager, RunLink, Short, Status, Time, humanize, usePageCursor, withCursor } from "../components/ui";
+import { Copy, DeploymentLink, Duration, EnvironmentLabel, Fact, Facts, Head12, Loaded, Pager, RunLink, Short, Status, Time, humanize, usePageCursor, withCursor } from "../components/ui";
 import { applicationList } from "../live/topics";
 
 // DeploymentFacts are one Deployment's identity: the exact image it applied
@@ -9,7 +9,8 @@ export function DeploymentFacts({ appId, d }: { appId: string; d: DeploymentRef 
   return (
     <Facts label={`Deployment #${d.number}`}>
       <Fact label="Deployment">
-        #{d.number} — <EnvironmentLabel environment={d.environment} /> — <Status status={d.status} />
+        <DeploymentLink appId={appId} id={d.id} number={d.number} /> — <EnvironmentLabel environment={d.environment} /> —{" "}
+        <Status status={d.status} />
       </Fact>
       <Fact label="Delivery">
         <RunLink appId={appId} id={d.deliveryRunId} number={d.deliveryNumber} />
@@ -56,8 +57,8 @@ export function DeploymentFacts({ appId, d }: { appId: string; d: DeploymentRef 
 // Deployments: 10 per page, newest first, every environment (Decision 0064
 // §12). Live like Builds: a Deployment's change is its delivery run's
 // (DELIVERY_CHANGED); the newest page also shows new ones, an older page only
-// its own rows' changes. # is text: a Deployment has no page of its own (its
-// delivery run's page shows it).
+// its own rows' changes. # links the Deployment's page. Status is the
+// Deployment's own (In progress, Succeeded, Failed), never its environment's.
 export function Deployments({ appId }: { appId: string }) {
   const cursor = usePageCursor();
   const r: Resource<Paged & { deployments: DeploymentRef[] }> = useResource(
@@ -89,7 +90,9 @@ export function Deployments({ appId }: { appId: string }) {
               <tbody>
                 {d.deployments.map((x) => (
                   <tr key={x.id}>
-                    <td>{x.number}</td>
+                    <td>
+                      <DeploymentLink appId={appId} id={x.id} number={x.number} />
+                    </td>
                     <td>
                       <Head12 revision={x.sourceRevision} head12={x.head12} />
                     </td>

@@ -1,35 +1,39 @@
 import type { EnvironmentSummary } from "../api/types";
-import { NotYet } from "../components/ui";
-import { DeploymentFacts } from "./Deployments";
+import { Ago, ExternalLink, Fact, Facts, Head12, Status } from "../components/ui";
+import { deriveEnvironmentStatus } from "../environment";
 
-// Preflight: what runs there now (the last successful Deployment) and, when
-// it differs, the last Deployment; the delivery is the navigation root.
-export function Preflight({ appId, env }: { appId: string; env: EnvironmentSummary }) {
-  if (!env.last) {
-    return (
-      <NotYet
-        title="Preflight"
-        what="Validation environment before production delivery."
-        state="Nothing has been deployed yet: the first successful build deploys it."
-      />
-    );
-  }
+// Preflight: how the environment is now, not how it was deployed (that is
+// the Deployments, Images and Delivery tabs' and a Deployment's page).
+//
+//   Status         the environment's derived state (deriveEnvironmentStatus)
+//   Commit         the commit of its last Deployment, the one the state is about
+//   Last deployed  when its current version (last successful Deployment) was deployed
+//   Tests          its validations: none run yet (Validation execution is a
+//                  later milestone), so "Not configured", never a count
+//   Open App       the deployed app, when PathOps exposes the environment
+export function Preflight({ env }: { env: EnvironmentSummary }) {
+  const status = deriveEnvironmentStatus(env.last);
   return (
     <>
       <h2>Preflight</h2>
-      {env.current ? (
-        <>
-          <h3>Deployed</h3>
-          <DeploymentFacts appId={appId} d={env.current} />
-        </>
-      ) : (
-        <p className="muted">No deployment has succeeded yet.</p>
-      )}
-      {env.last.id !== env.current?.id && (
-        <>
-          <h3>Last deployment</h3>
-          <DeploymentFacts appId={appId} d={env.last} />
-        </>
+      <Facts label="Preflight environment">
+        <Fact label="Status">
+          <Status status={status.state} />
+        </Fact>
+        <Fact label="Commit">{env.last ? <Head12 revision={env.last.sourceRevision} head12={env.last.head12} /> : <span className="muted">—</span>}</Fact>
+        <Fact label="Last deployed">
+          <Ago at={env.current?.completedAt} relative />
+        </Fact>
+        <Fact label="Tests">
+          <span className="muted">Not configured</span>
+        </Fact>
+      </Facts>
+      {/* Also when Unstable: the app may still answer, to inspect by hand;
+          the Status says the environment is not sound. */}
+      {env.url && status.state !== "NOT_DEPLOYED" && (
+        <p>
+          <ExternalLink href={env.url}>Open App</ExternalLink>
+        </p>
       )}
     </>
   );

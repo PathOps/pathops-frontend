@@ -475,3 +475,63 @@ describe("Live updates", () => {
     expect(within(header).queryByText(/Reconnecting|disconnected/)).not.toBeInTheDocument();
   });
 });
+
+describe("Live environment state", () => {
+  const deploying = { ...f.deployment, status: "IN_PROGRESS", completedAt: null, durationSeconds: null, startedAt: new Date(Date.now() - 30_000).toISOString() };
+  const done = { ...f.deployment, completedAt: new Date().toISOString() };
+  const overview = (last: unknown, current: unknown) => ({
+    ...f.overview,
+    sections: [...f.overview.sections, "preflight", "deployments"],
+    preflight: { environment: "PREFLIGHT", last, current },
+  });
+
+  it("Preflight and the header go from Deploying to Healthy without a reload, with the Deployment's delivery change", async () => {
+    const source = fakeSource();
+    const t = table();
+    t[`${app}/overview`] = overview(deploying, null);
+    const api = fakeApi(t);
+    renderLive(`/applications/${f.appId}/preflight`, api, source);
+    const facts = await screen.findByRole("table", { name: "Preflight environment" });
+    const summary = screen.getByRole("table", { name: "Summary" });
+    expect(within(facts).getByText("Deploying")).toHaveClass("status-running");
+    expect(within(summary).getByText("Deploying").closest("td")).toHaveTextContent(/^Deploying — [3-9][0-9]s$/);
+    const c = await connected(source);
+    t[`${app}/overview`] = overview(done, done);
+    act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
+    expect(await within(facts).findByText("Healthy")).toHaveClass("status-ok");
+    expect(within(facts).getByText("just now")).toBeInTheDocument();
+    await waitFor(() => expect(within(summary).getByText("Healthy").closest("td")).toHaveTextContent(/^Healthy — [0-9]s$/));
+    expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+  });
+
+  it("the Applications list goes from Deploying to Healthy without a reload", async () => {
+    const source = fakeSource();
+    const t = table();
+    const row = (d: unknown, status: string) => ({ applications: [{ ...f.applications.applications[0], preflight: { status, deployedAt: null, deployment: d } }] });
+    t["/api/v1/applications"] = row(deploying, "IN_PROGRESS");
+    const api = fakeApi(t);
+    renderLive("/applications", api, source);
+    expect(await screen.findByText("Deploying")).toHaveClass("status-running");
+    const c = await connected(source);
+    t["/api/v1/applications"] = row(done, "SUCCEEDED");
+    act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
+    expect(await screen.findByText("Healthy")).toHaveClass("status-ok");
+    expect(screen.queryByText("Deploying")).not.toBeInTheDocument();
+  });
+
+  it("Images move their Environment with the current Deployment, without a reload", async () => {
+    const source = fakeSource();
+    const t = table();
+    t[`${app}/overview`] = overview(null, null);
+    t[`${app}/images`] = { ...f.images, nextCursor: null, previousCursor: null };
+    const api = fakeApi(t);
+    renderLive(`/applications/${f.appId}/images`, api, source);
+    const region = await screen.findByRole("region", { name: "Images" });
+    await waitFor(() => expect(within(region).getAllByRole("row")).toHaveLength(2));
+    expect(within(within(region).getAllByRole("row")[1]).getAllByRole("cell")[1]).toHaveTextContent(/^—$/);
+    const c = await connected(source);
+    t[`${app}/overview`] = overview(f.deployment, f.deployment);
+    act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
+    await waitFor(() => expect(within(within(region).getAllByRole("row")[1]).getAllByRole("cell")[1]).toHaveTextContent(/^Preflight$/));
+  });
+});

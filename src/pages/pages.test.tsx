@@ -5,7 +5,7 @@ import { ApiError } from "../api/client";
 import { authorizationUrl, completeSignIn, loadConfig, resetForTests, signedIn } from "../auth/oidc";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../App";
-import { Duration, EnvironmentLabel } from "../components/ui";
+import { Ago, Duration, EnvironmentLabel, Status } from "../components/ui";
 import { ValidationsTable } from "../sections/Validations";
 import type { DeliveryDetail } from "../api/types";
 import { fakeApi, renderAt } from "../test/render";
@@ -52,17 +52,20 @@ describe("Applications", () => {
       "Provisioning",
       "Created",
     ]);
-    expect(screen.getAllByText("not deployed")).toHaveLength(2);
+    expect(screen.getAllByText("Not deployed")).toHaveLength(2);
   });
 
-  it("shows an environment as its health, the app's link and how long ago it was deployed", async () => {
-    const at = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
-    const app = { ...f.applications.applications[0], production: { status: "HEALTHY", url: "https://manual-web.example.test/", deployedAt: at } };
+  it("shows an environment as its state and how long it has been in it, as the header does: Healthy — 2h, no Deployment numbers", async () => {
+    const at = new Date(Date.now() - 2 * 3600 * 1000 - 60_000).toISOString();
+    const last = { ...f.deployment, completedAt: at };
+    const app = { ...f.applications.applications[0], preflight: { status: "SUCCEEDED", deployedAt: at, deployment: last } };
     renderAt("/", fakeApi({ "/api/v1/applications": { applications: [app] } }));
-    const open = await screen.findByRole("link", { name: "Open app ↗" });
-    expect(open).toHaveAttribute("href", "https://manual-web.example.test/");
-    expect(open.closest("td")).toHaveTextContent(/^Healthy — Open app ↗ — 3h$/);
-    expect(screen.getAllByText("not deployed")).toHaveLength(1);
+    const healthy = await screen.findByText("Healthy");
+    expect(healthy).toHaveClass("status-ok");
+    const cell = healthy.closest("td")!;
+    expect(cell).toHaveTextContent(/^Healthy — 2h$/);
+    expect(within(cell).queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Not deployed")).toHaveLength(1);
   });
 
   it("shows an empty list", async () => {
@@ -766,21 +769,68 @@ describe("Preflight (Decision 0064)", () => {
     },
     [`${app}/deployments`]: { deployments: [dep], nextCursor: null, previousCursor: null },
   };
+  const withEnv = (preflight: unknown) => ({
+    ...withPreflight,
+    [`${app}/overview`]: { ...(withPreflight[`${app}/overview`] as object), preflight },
+  });
 
-  it("summarizes the deployed Preflight, its exact image and revisions, and lists Deployments", async () => {
-    renderAt(`/applications/${f.appId}/preflight`, fakeApi(withPreflight));
-    const summary = await screen.findByRole("table", { name: "Summary" });
-    expect(summary).toHaveTextContent("Deployment #1");
+  it("answers how the environment is now: Status, Commit, Last deployed, Tests; nothing about how it was deployed", async () => {
+    const at = new Date(Date.now() - 2 * 60_000 - 5000).toISOString();
+    const d = { ...dep, completedAt: at };
+    renderAt(`/applications/${f.appId}/preflight`, fakeApi(withEnv({ environment: "PREFLIGHT", last: d, current: d })));
     const section = await screen.findByRole("region", { name: "Preflight" });
-    expect(section).toHaveTextContent(dep.imageReference);
-    expect(section).toHaveTextContent("alice/hello-gitops-preflight");
-    const tabs = screen.getByRole("navigation", { name: "Application sections" });
-    await userEvent.click(within(tabs).getByRole("link", { name: "Deployments" }));
-    const list = await screen.findByRole("region", { name: "Deployments" });
-    const rows = within(list).getAllByRole("row").slice(1);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toHaveTextContent("Preflight");
-    expect(rows[0]).toHaveTextContent("#1");
+    const facts = within(section).getByRole("table", { name: "Preflight environment" });
+    expect(within(facts).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["Status", "Commit", "Last deployed", "Tests"]);
+    expect(within(facts).getByText("Healthy")).toHaveClass("status-ok");
+    expect(within(facts).getByText(dep.head12)).toHaveAttribute("title", dep.sourceRevision);
+    expect(within(facts).getByText("2m ago")).toHaveAttribute("dateTime", at);
+    expect(within(facts).getByText("Not configured")).toBeInTheDocument();
+    for (const gone of ["Deployment", "Image", "GitOps repository", "Update Task revision", "Started", "Duration", "Source commit"])
+      expect(within(section).queryByText(gone)).not.toBeInTheDocument();
+    expect(section).not.toHaveTextContent(dep.imageReference);
+    expect(section).not.toHaveTextContent("alice/hello-gitops-preflight");
+    // No URL from the Tenant CP: no Open App.
+    expect(within(section).queryByRole("link", { name: /Open App/ })).not.toBeInTheDocument();
+    // The header: the same state, no Deployment or Delivery number.
+    const summary = screen.getByRole("table", { name: "Summary" });
+    const cell = within(summary).getByText("Healthy").closest("td")!;
+    expect(cell).toHaveTextContent(/^Healthy — 2m$/);
+    expect(within(cell).queryByRole("link")).not.toBeInTheDocument();
+    expect(summary).not.toHaveTextContent("Deployment #");
+  });
+
+  it("states Not deployed, Deploying, Healthy and Unstable; Open App when PathOps gives the app's URL, also when Unstable", async () => {
+    const url = "https://manual-web-preflight.example.test/";
+    const running = {
+      ...dep,
+      id: "dep-2",
+      number: 2,
+      status: "IN_PROGRESS",
+      completedAt: null,
+      durationSeconds: null,
+      head12: "bbbbbbbbbbbb",
+      sourceRevision: "bbbbbbbbbbbb" + "c".repeat(28),
+    };
+    const cases: [string, unknown, string, boolean][] = [
+      ["Not deployed", { environment: "PREFLIGHT", last: null, current: null, url }, "status-neutral", false],
+      ["Deploying", { environment: "PREFLIGHT", last: running, current: dep, url }, "status-running", true],
+      ["Healthy", { environment: "PREFLIGHT", last: dep, current: dep, url }, "status-ok", true],
+      ["Unstable", { environment: "PREFLIGHT", last: { ...running, status: "FAILED", completedAt: dep.completedAt }, current: dep, url }, "status-error", true],
+    ];
+    for (const [state, preflight, cls, open] of cases) {
+      const { unmount } = renderAt(`/applications/${f.appId}/preflight`, fakeApi(withEnv(preflight)));
+      const facts = await screen.findByRole("table", { name: "Preflight environment" });
+      expect(within(facts).getByText(state)).toHaveClass(cls);
+      const link = screen.queryByRole("link", { name: "Open App ↗" });
+      if (open) {
+        expect(link).toHaveAttribute("href", url);
+        expect(link).toHaveAttribute("target", "_blank");
+      } else expect(link).not.toBeInTheDocument();
+      // The Commit is the last Deployment's, the one the state is about.
+      if (state === "Deploying") expect(within(facts).getByText("bbbbbbbbbbbb")).toBeInTheDocument();
+      if (state === "Not deployed") expect(within(facts).getAllByText("—")).toHaveLength(2);
+      unmount();
+    }
   });
 
   it("shows a delivery step's Deployment in its details", async () => {
@@ -843,20 +893,30 @@ describe("Deployments", () => {
     ]);
     const [first, second] = rows(list);
     // As the Tenant CP orders them: #2 (the newest) first.
-    expect(within(first).getAllByRole("cell")[0]).toHaveTextContent(/^2$/);
-    expect(within(second).getAllByRole("cell")[0]).toHaveTextContent(/^1$/);
-    // # is text: a Deployment has no page of its own.
-    expect(within(within(first).getAllByRole("cell")[0]).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(first).getAllByRole("cell")[0]).toHaveTextContent(/^#2$/);
+    expect(within(second).getAllByRole("cell")[0]).toHaveTextContent(/^#1$/);
+    // # links the Deployment's page.
+    expect(within(within(first).getAllByRole("cell")[0]).getByRole("link", { name: "#2" })).toHaveAttribute(
+      "href",
+      `/applications/${f.appId}/deployments/dep-2`,
+    );
     // The failed one.
     expect(within(first).getByText("Failed")).toHaveClass("status-error");
     expect(within(first).getByText("bbbbbbbbbbbb")).toHaveAttribute("title", failed.sourceRevision);
-    expect(within(first).getByText("Preflight")).toHaveClass("environment", "environment-preflight");
-    expect(within(first).getByRole("link", { name: "#2" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-bad`);
+    // The environment is plain words: color is for the status.
+    expect(within(first).getByText("Preflight").className).toBe("");
+    expect(within(within(first).getAllByRole("cell")[6]).getByRole("link", { name: "#2" })).toHaveAttribute(
+      "href",
+      `/applications/${f.appId}/deliveries/run-bad`,
+    );
     expect(within(first).getAllByRole("cell")[5]).toHaveTextContent("5m 00s");
     // The succeeded one: the 12-character commit, its delivery.
     expect(within(second).getByText("Succeeded")).toHaveClass("status-ok");
     expect(within(second).getByText(f.okRev.slice(0, 12))).toHaveAttribute("title", f.okRev);
-    expect(within(second).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    expect(within(within(second).getAllByRole("cell")[6]).getByRole("link", { name: "#1" })).toHaveAttribute(
+      "href",
+      `/applications/${f.appId}/deliveries/run-ok`,
+    );
     expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
   });
 
@@ -882,7 +942,7 @@ describe("Deployments", () => {
     expect(within(pager).getByText("← Previous")).toHaveAttribute("aria-disabled", "true");
     await userEvent.click(within(pager).getByRole("link", { name: "Next →" }));
     await waitFor(() => expect(api.calls).toContain(`${app}/deployments?cursor=p-16`));
-    await waitFor(() => expect(screen.getByRole("link", { name: "#15" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByRole("link", { name: "#15" })).toHaveLength(2));
     const next = screen.getByRole("navigation", { name: "Deployment pages" });
     expect(within(next).getByRole("link", { name: "← Previous" })).toHaveAttribute("href", `/applications/${f.appId}/deployments?cursor=p-15`);
     expect(within(next).getByRole("link", { name: "Next →" })).toHaveAttribute("href", `/applications/${f.appId}/deployments?cursor=p-6`);
@@ -890,17 +950,17 @@ describe("Deployments", () => {
 });
 
 describe("Environment", () => {
-  it("is semibold words in the environment's own class: Preflight and Production", () => {
+  it("is plain words, Preflight and Production: no color of its own, never a status's", () => {
     render(
       <>
         <EnvironmentLabel environment="PREFLIGHT" />
         <EnvironmentLabel environment="PRODUCTION" />
       </>,
     );
-    expect(screen.getByText("Preflight")).toHaveClass("environment", "environment-preflight");
-    expect(screen.getByText("Production")).toHaveClass("environment", "environment-production");
-    // Never a status's classes.
-    expect(screen.getByText("Production").className).not.toMatch(/status-/);
+    for (const name of ["Preflight", "Production"]) {
+      expect(screen.getByText(name).className).toBe("");
+      expect(screen.getByText(name).tagName).not.toBe("STRONG");
+    }
   });
 });
 
@@ -934,10 +994,128 @@ describe("Validations table", () => {
       "Delivery",
     ]);
     const [first, second] = screen.getAllByRole("row").slice(1);
-    expect(within(first).getByText("Production")).toHaveClass("environment", "environment-production");
+    expect(within(first).getByText("Production").className).toBe("");
     expect(within(first).getByText("12/12")).toBeInTheDocument();
     expect(within(first).getByText(f.okRev.slice(0, 12))).toBeInTheDocument();
     expect(within(first).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
-    expect(within(second).getByText("Preflight")).toHaveClass("environment", "environment-preflight");
+    expect(within(second).getByText("Preflight").className).toBe("");
+  });
+});
+
+describe("Images Environment", () => {
+  const A = f.digest;
+  const B = "sha256:" + "b".repeat(64);
+  const imgB = { ...f.images.images[0], digest: B, buildId: "build-2", buildNumber: 2, revision: "bbbbbbbbbbbb" };
+  const onB = { ...f.deployment, id: "dep-2", number: 2, imageReference: `zot-test.example/apps/${f.appId}:bbbbbbbbbbbb@${B}` };
+  const tableWith = (preflight: unknown) => ({
+    ...all,
+    [`${app}/overview`]: { ...f.overview, sections: [...f.overview.sections, "preflight", "deployments"], preflight },
+    [`${app}/images`]: { images: [imgB, f.images.images[0]], nextCursor: null, previousCursor: null },
+  });
+
+  it("is a column after Tag: where each image runs now, from the current Deployments, not history", async () => {
+    // #1 deployed A, #2 deployed B: Preflight runs B now.
+    renderAt(`/applications/${f.appId}/images`, fakeApi(tableWith({ environment: "PREFLIGHT", last: onB, current: onB })));
+    const region = await screen.findByRole("region", { name: "Images" });
+    await waitFor(() => expect(within(region).getAllByRole("row")).toHaveLength(3));
+    expect(within(region).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Tag", "Environment", "Digest", "Build", "Created"]);
+    const [b, a] = within(region).getAllByRole("row").slice(1);
+    expect(within(b).getAllByRole("cell")[1]).toHaveTextContent(/^Preflight$/);
+    expect(within(a).getAllByRole("cell")[1]).toHaveTextContent(/^—$/);
+    expect(A).not.toBe(B);
+  });
+
+  it("is — for every image before any Deployment, and keeps the last successful one's image while a new one fails", async () => {
+    const { unmount } = renderAt(`/applications/${f.appId}/images`, fakeApi(tableWith({ environment: "PREFLIGHT", last: null, current: null })));
+    let region = await screen.findByRole("region", { name: "Images" });
+    await waitFor(() => expect(within(region).getAllByRole("row")).toHaveLength(3));
+    for (const r of within(region).getAllByRole("row").slice(1)) expect(within(r).getAllByRole("cell")[1]).toHaveTextContent(/^—$/);
+    unmount();
+    // #2 (image B) failed: Preflight still runs #1's image A.
+    const failed = { ...onB, status: "FAILED" };
+    renderAt(`/applications/${f.appId}/images`, fakeApi(tableWith({ environment: "PREFLIGHT", last: failed, current: f.deployment })));
+    region = await screen.findByRole("region", { name: "Images" });
+    await waitFor(() => expect(within(region).getAllByRole("row")).toHaveLength(3));
+    const [b, a] = within(region).getAllByRole("row").slice(1);
+    expect(within(b).getAllByRole("cell")[1]).toHaveTextContent(/^—$/);
+    expect(within(a).getAllByRole("cell")[1]).toHaveTextContent(/^Preflight$/);
+  });
+});
+
+describe("Deployment page", () => {
+  const detail = { ...f.deployment, build: { id: "build-ok", number: 1, status: "SUCCEEDED" } };
+  const api = () =>
+    fakeApi({
+      ...all,
+      [`${app}/deployments`]: { deployments: [f.deployment], nextCursor: null, previousCursor: null },
+      [`${app}/deployments/dep-1`]: detail,
+    });
+
+  it("opens from # in Deployments: Deployment #N, its environment, status, commit, image, delivery, times, GitOps commit", async () => {
+    renderAt(`/applications/${f.appId}/deployments`, api());
+    const list = await screen.findByRole("region", { name: "Deployments" });
+    await waitFor(() => expect(within(list).getAllByRole("row")).toHaveLength(2));
+    const number = within(within(list).getAllByRole("row")[1]).getAllByRole("cell")[0];
+    await userEvent.click(within(number).getByRole("link", { name: "#1" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Deployment #1" })).toBeInTheDocument();
+    const facts = screen.getByRole("table", { name: "Deployment" });
+    expect(within(facts).getAllByRole("rowheader").map((h) => h.textContent)).toEqual([
+      "Environment",
+      "Status",
+      "Commit",
+      "Image",
+      "Delivery",
+      "Started",
+      "Duration",
+      "GitOps commit",
+    ]);
+    expect(within(facts).getByText("Preflight")).toBeInTheDocument();
+    expect(within(facts).getByText("Succeeded")).toHaveClass("status-ok");
+    expect(within(facts).getByText(f.okRev)).toBeInTheDocument();
+    expect(within(facts).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual([
+      `/applications/${f.appId}/builds/build-ok`,
+      `/applications/${f.appId}/deliveries/run-ok`,
+    ]);
+    expect(within(facts).getByRole("button", { name: "Copy image reference" })).toBeInTheDocument();
+    expect(within(facts).getByText("2m 00s")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Deployments" })).toHaveAttribute("href", `/applications/${f.appId}/deployments`);
+  });
+
+  it("is a real route; another user's or an unknown Deployment is not found", async () => {
+    renderAt(`/applications/${f.appId}/deployments/dep-9`, api());
+    expect(await screen.findByRole("alert")).toHaveTextContent("Not found, or not yours.");
+  });
+
+  it("shows a failed Deployment's error, and no Build link without one", async () => {
+    const failed = { ...detail, status: "FAILED", build: null, gitopsCommit: undefined, failureReason: "FLUX_RECONCILIATION_FAILED", failureMessage: "Ready=False" };
+    renderAt(`/applications/${f.appId}/deployments/dep-1`, fakeApi({ ...all, [`${app}/deployments/dep-1`]: failed }));
+    const facts = await screen.findByRole("table", { name: "Deployment" });
+    expect(within(facts).getByText("Failed")).toHaveClass("status-error");
+    expect(facts).toHaveTextContent("Flux reconciliation failed: Ready=False");
+    expect(facts).toHaveTextContent("not yet");
+    expect(within(facts).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual([`/applications/${f.appId}/deliveries/run-ok`]);
+  });
+});
+
+describe("Status in progress", () => {
+  it("colors In progress as a running status, never success or failure", () => {
+    render(<Status status="IN_PROGRESS" />);
+    expect(screen.getByText("In progress")).toHaveClass("status-running");
+  });
+});
+
+describe("Relative time", () => {
+  it("is just now, then 2m ago, 1h ago, 3h ago, 1d ago; the full time on hover", () => {
+    const now = Date.parse("2026-11-21T12:00:00Z");
+    const at = (s: number) => new Date(now - s * 1000).toISOString();
+    render(
+      <>
+        {[5, 125, 3700, 3 * 3600 + 10, 86500].map((s) => (
+          <Ago key={s} at={at(s)} now={now} relative />
+        ))}
+      </>,
+    );
+    expect(screen.getAllByRole("time").map((t) => t.textContent)).toEqual(["just now", "2m ago", "1h ago", "3h ago", "1d ago"]);
+    expect(screen.getByText("2m ago")).toHaveAttribute("title", at(125));
   });
 });

@@ -2,7 +2,8 @@ import { Link } from "react-router-dom";
 import type { ApplicationSummary, EnvironmentRef, Technology } from "../api/types";
 import { useResource } from "../api/useResource";
 import { Page } from "../components/Page";
-import { Ago, ExternalLink, Loaded, RunLink, Status, Time } from "../components/ui";
+import { EnvironmentState, Loaded, RunLink, Status, Time } from "../components/ui";
+import { deriveEnvironmentStatus } from "../environment";
 import { applications } from "../live/topics";
 
 export function technologyLine(t: Technology | null): string {
@@ -10,23 +11,10 @@ export function technologyLine(t: Technology | null): string {
   return [t.language, t.framework, t.runtime, t.build].filter(Boolean).join(" · ");
 }
 
-// Environment is "Healthy — Open app ↗ — 3s": health, the app's link and
-// how long ago its current version was deployed.
+// Environment is an environment's derived state, "Healthy — 2h" (the same as
+// an Application's header): from its last Deployment.
 function Environment({ env }: { env: EnvironmentRef | null | undefined }) {
-  if (!env) return <span className="muted">not deployed</span>;
-  return (
-    <>
-      <Status status={env.status} />
-      {env.url && (
-        <>
-          {" — "}
-          <ExternalLink href={env.url}>Open app</ExternalLink>
-        </>
-      )}
-      {" — "}
-      <Ago at={env.deployedAt} />
-    </>
-  );
+  return <EnvironmentState status={deriveEnvironmentStatus(env?.deployment)} />;
 }
 
 // ApplicationsPage lists the signed-in user's Applications.

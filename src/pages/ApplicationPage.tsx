@@ -2,7 +2,8 @@ import { NavLink, Navigate, useParams } from "react-router-dom";
 import type { Overview } from "../api/types";
 import { useResource } from "../api/useResource";
 import { Page } from "../components/Page";
-import { Copy, ExternalLink, Loaded, NotYet, RunLink, Status } from "../components/ui";
+import { Copy, EnvironmentState, ExternalLink, Loaded, NotYet, RunLink, Status } from "../components/ui";
+import { deriveEnvironmentStatus } from "../environment";
 import { applicationOverview } from "../live/topics";
 import { Builds } from "../sections/Builds";
 import { Deliveries } from "../sections/Deliveries";
@@ -39,9 +40,9 @@ const sections: Record<string, Section> = {
   preflight: {
     title: "Preflight",
     planned: true,
-    render: (id, o) =>
+    render: (_id, o) =>
       o.preflight ? (
-        <Preflight appId={id} env={o.preflight} />
+        <Preflight env={o.preflight} />
       ) : (
         <NotYet
           title="Preflight"
@@ -53,22 +54,18 @@ const sections: Record<string, Section> = {
   deliveries: { title: "Delivery", render: (id) => <Deliveries appId={id} /> },
   validations: { title: "Validations", planned: true, render: () => <Validations /> },
   deployments: { title: "Deployments", planned: true, render: (id) => <Deployments appId={id} /> },
-  images: { title: "Images", render: (id) => <Images appId={id} /> },
+  images: { title: "Images", render: (id, o) => <Images appId={id} current={{ PREFLIGHT: o.preflight?.current }} /> },
   builds: { title: "Builds", render: (id) => <Builds appId={id} /> },
   repositories: { title: "Repositories", render: (id) => <RepositoriesSection appId={id} /> },
   provisioning: { title: "Provisioning", render: (id) => <ProvisioningSection appId={id} /> },
 };
 
-// PreflightState: the Deployment running in Preflight, or why there is none.
-function PreflightState({ appId, o }: { appId: string; o: Overview }) {
+// PreflightState: the Preflight environment's state ("Healthy — 2h"), the
+// same as the Applications list's; no Deployment or Delivery numbers (their
+// tabs have them).
+function PreflightState({ o }: { o: Overview }) {
   if (!o.preflight) return <span className="muted">not created yet</span>;
-  const d = o.preflight.current ?? o.preflight.last;
-  if (!d) return <span className="muted">not deployed yet</span>;
-  return (
-    <>
-      Deployment #{d.number} — <Status status={d.status} /> — <RunLink appId={appId} id={d.deliveryRunId} number={d.deliveryNumber} />
-    </>
-  );
+  return <EnvironmentState status={deriveEnvironmentStatus(o.preflight.last)} />;
 }
 
 function Summary({ o }: { o: Overview }) {
@@ -105,7 +102,7 @@ function Summary({ o }: { o: Overview }) {
           </td>
           <th scope="row">Preflight</th>
           <td>
-            <PreflightState appId={o.id} o={o} />
+            <PreflightState o={o} />
           </td>
         </tr>
       </tbody>
