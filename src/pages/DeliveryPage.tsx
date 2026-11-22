@@ -1,83 +1,320 @@
-import { Fragment } from "react";
-import { useParams } from "react-router-dom";
-import type { DeliveryDetail, DeliveryStep } from "../api/types";
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import type {
+  BuildDetail,
+  DeliveryDetail,
+  DeliveryStep,
+  DeploymentDetail,
+  DeploymentStepDetail,
+  FluxExecution,
+  TektonExecution,
+} from "../api/types";
 import { running, useResource, type Resource } from "../api/useResource";
-import { FailureText } from "../components/execution";
+import { FailureText, FluxReady, FluxRevision, Sha12, TektonStepsTable, executorName, type LogPath } from "../components/execution";
 import { Page } from "../components/Page";
-import { BuildLink, Copy, DeploymentLink, Duration, EnvironmentLabel, Fact, Facts, Loaded, Status, Time, humanize } from "../components/ui";
+import { Node, Row, Tree } from "../components/tree";
+import { BuildLink, Copy, DeploymentLink, Duration, EnvironmentLabel, Fact, Facts, Loaded, Status, Time, humanize, seconds } from "../components/ui";
 import { resource } from "../live/topics";
 import { AppCrumbs, appPath } from "./BuildPage";
+import { stepPath } from "./DeploymentPage";
 
-// StepDetails is where a top-level step's details are: its Build or its
-// Deployment (a Deployment's own steps are on its page).
-function StepDetails({ appId, s }: { appId: string; s: DeliveryStep }) {
-  if (s.build)
-    return (
-      <>
-        Build <BuildLink appId={appId} id={s.build.id} number={s.build.number} />
-      </>
-    );
-  if (s.deployment)
-    return (
-      <>
-        Deployment <DeploymentLink appId={appId} id={s.deployment.id} number={s.deployment.number} /> —{" "}
-        <EnvironmentLabel environment={s.deployment.environment} />
-      </>
-    );
-  return <span className="muted">—</span>;
+// The Delivery tree (Decision 0066): what happened, in order, at a glance.
+// Each step has its projection (what PathOps accepted) and its Execution
+// (what the engine reported) as siblings; under a Tekton Execution its
+// PipelineRun, TaskRuns and Steps (logs live), under a Flux one its
+// GitRepository and Kustomization. Only the few facts that tell what
+// happened; every # links the page with all of them.
+
+const stepHead = ["#", "Step", "Status", "Started", "Duration"];
+
+// StepRow is a step's one-row table; # links its page (none: plain).
+function StepRow({ s, to }: { s: DeliveryStep; to?: string }) {
+  return (
+    <Row
+      label={`Step ${humanize(s.type)}`}
+      head={stepHead}
+      cells={[
+        to ? <Link to={to}>#{s.position}</Link> : `#${s.position}`,
+        humanize(s.type),
+        <Status status={s.status} />,
+        <Time at={s.startedAt} />,
+        <Duration seconds={s.durationSeconds} />,
+      ]}
+    />
+  );
 }
 
-// Steps are the run's top-level steps in order (Decision 0066): Build
-// application, Deploy preflight, ... as the Tenant CP returns them; a new
-// type appears with no change here. A failed step's error is under it.
-function Steps({ appId, steps }: { appId: string; steps: DeliveryStep[] }) {
+// ExecutionRow is an Execution's one-row table: its executor, what it
+// reported and how long it took (its reason only when it failed).
+function ExecutionRow({ x }: { x: TektonExecution | FluxExecution }) {
+  const failed = x.status === "FAILED";
   return (
-    <div className="scroll">
-      <table aria-label="Delivery steps">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Step</th>
-            <th>Status</th>
-            <th>Started</th>
-            <th>Duration</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[...steps]
-            .sort((a, b) => a.position - b.position)
-            .map((s) => (
-              <Fragment key={s.position}>
-                <tr>
-                  <td>{s.position}</td>
-                  <td>{humanize(s.type)}</td>
-                  <td>
-                    <Status status={s.status} />
-                  </td>
-                  <td>
-                    <Time at={s.startedAt} />
-                  </td>
-                  <td>
-                    <Duration seconds={s.durationSeconds} />
-                  </td>
-                  <td>
-                    <StepDetails appId={appId} s={s} />
-                  </td>
-                </tr>
-                {s.failure && (
-                  <tr>
-                    <td />
-                    <td colSpan={5}>
-                      <FailureText failure={s.failure} />
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            ))}
-        </tbody>
-      </table>
-    </div>
+    <Row
+      label={`Execution ${executorName(x.executor)}`}
+      head={["Execution", "Executor", "Status", "Duration", ...(failed ? ["Reason"] : [])]}
+      cells={[
+        "",
+        executorName(x.executor),
+        <Status status={x.status} />,
+        <Duration seconds={seconds(x.startedAt, x.completedAt)} />,
+        ...(failed ? [x.reason ?? "—"] : []),
+      ]}
+    />
+  );
+}
+
+// TektonNodes are a Tekton Execution's PipelineRun -> TaskRuns -> Steps.
+function TektonNodes({ id, x, logPath }: { id: string; x: TektonExecution; logPath: LogPath }) {
+  const [log, setLog] = useState<string | null>(null);
+  return (
+    <Node
+      id={`${id}/pr`}
+      label={`PipelineRun ${x.pipelineRun.name}`}
+      table={
+        <Row
+          label="PipelineRun"
+          head={["PipelineRun", "Status", "Duration"]}
+          cells={[
+            <code title={`${x.pipelineRun.namespace}/${x.pipelineRun.name}`}>{x.pipelineRun.name}</code>,
+            <Status status={x.status} />,
+            <Duration seconds={seconds(x.startedAt, x.completedAt)} />,
+          ]}
+        />
+      }
+    >
+      {x.taskRuns.map((tr) => (
+        <Node
+          key={tr.name}
+          id={`${id}/tr/${tr.name}`}
+          label={`TaskRun ${tr.pipelineTask}`}
+          table={
+            <Row
+              label={`TaskRun ${tr.pipelineTask}`}
+              head={["TaskRun", "Status", "Duration"]}
+              cells={[
+                <code title={tr.name}>{tr.pipelineTask}</code>,
+                tr.observedAt ? <Status status={tr.status} /> : <span className="muted">not observed</span>,
+                <Duration seconds={seconds(tr.startedAt, tr.completedAt)} />,
+              ]}
+            />
+          }
+        >
+          {tr.steps.length > 0 && (
+            <li className="tree-node tree-leaf">
+              <TektonStepsTable tr={tr} logPath={logPath} open={log} onLog={(key) => setLog(log === key ? null : key)} />
+            </li>
+          )}
+        </Node>
+      ))}
+    </Node>
+  );
+}
+
+// FluxNodes are a Flux Execution's GitRepository and Kustomization, each its
+// own row (they are not the same object).
+function FluxNodes({ id, x }: { id: string; x: FluxExecution }) {
+  return (
+    <>
+      <Node
+        id={`${id}/gr`}
+        label="GitRepository"
+        table={
+          <Row
+            label="GitRepository"
+            head={["GitRepository", "Revision", "Ready"]}
+            cells={[
+              <code>{x.gitRepository?.name ?? "—"}</code>,
+              <FluxRevision rev={x.gitRepository?.artifactRevision} />,
+              <FluxReady o={x.gitRepository} />,
+            ]}
+          />
+        }
+      />
+      <Node
+        id={`${id}/ks`}
+        label="Kustomization"
+        table={
+          <Row
+            label="Kustomization"
+            head={["Kustomization", "Applied", "Ready"]}
+            cells={[
+              <code>{x.kustomization?.name ?? "—"}</code>,
+              <FluxRevision rev={x.kustomization?.lastAppliedRevision} />,
+              <FluxReady o={x.kustomization} />,
+            ]}
+          />
+        }
+      />
+    </>
+  );
+}
+
+// ExecutionNode is an Execution with what is its engine's below it.
+function ExecutionNode({ id, x, logPath }: { id: string; x: TektonExecution | FluxExecution; logPath?: LogPath }) {
+  return (
+    <Node id={`${id}/exec`} label={`Execution ${executorName(x.executor)}`} table={<ExecutionRow x={x} />}>
+      {x.executor === "TEKTON" ? <TektonNodes id={`${id}/exec`} x={x as TektonExecution} logPath={logPath!} /> : <FluxNodes id={`${id}/exec`} x={x as FluxExecution} />}
+    </Node>
+  );
+}
+
+// BuildBranch is BUILD_APPLICATION: its Build and its Execution. Live with
+// its Build (BUILD_CHANGED); read again every few seconds while it runs.
+function BuildBranch({ appId, s }: { appId: string; s: DeliveryStep }) {
+  const buildId = s.build?.id;
+  const b: Resource<BuildDetail> = useResource(buildId ? appPath(appId, `/builds/${encodeURIComponent(buildId)}`) : null, {
+    live: (e) => !!buildId && resource("BUILD_CHANGED", buildId)(e),
+    pollWhile: (d) => running(d.status),
+  });
+  const id = `s${s.position}`;
+  const d = b.data;
+  return (
+    <Node
+      id={id}
+      label={humanize(s.type)}
+      table={<StepRow s={s} to={buildId ? `/applications/${appId}/builds/${buildId}` : undefined} />}
+      note={s.failure && <FailureText failure={s.failure} />}
+    >
+      {s.build && (
+        <Node
+          id={`${id}/build`}
+          label={`Build #${s.build.number}`}
+          table={
+            <Row
+              label="Build"
+              head={["Build", "Status", "Image"]}
+              cells={[
+                <BuildLink appId={appId} id={s.build.id} number={s.build.number} />,
+                <Status status={s.build.status} />,
+                s.build.image ? <code title={s.build.image.digest}>{s.build.image.revision}</code> : <span className="muted">—</span>,
+              ]}
+            />
+          }
+        />
+      )}
+      {d?.execution && (
+        <ExecutionNode
+          id={id}
+          x={d.execution}
+          logPath={(tr, step) =>
+            appPath(appId, `/builds/${encodeURIComponent(d.id)}/tasks/${encodeURIComponent(tr)}/logs?step=${encodeURIComponent(step)}`)
+          }
+        />
+      )}
+    </Node>
+  );
+}
+
+// ChildBranch is one step of a Deployment: its projection (GitOps update,
+// Reconciliation) and its Execution, from the step's page data. Live with
+// the run; read again every few seconds while it runs.
+function ChildBranch({ appId, runId, parent, deploymentId, s }: { appId: string; runId: string; parent: string; deploymentId?: string; s: DeliveryStep }) {
+  const started = !!deploymentId && !!s.startedAt;
+  const base = deploymentId ? `/deployments/${encodeURIComponent(deploymentId)}/steps/${encodeURIComponent(s.type)}` : "";
+  const r: Resource<DeploymentStepDetail> = useResource(started ? appPath(appId, base) : null, {
+    live: (e) => resource("DELIVERY_CHANGED", runId)(e),
+    pollWhile: (d) => running(d.status),
+  });
+  const id = `${parent}/s${s.position}`;
+  const d = r.data;
+  const to = started ? stepPath(appId, deploymentId!, s.type) : undefined;
+  return (
+    <Node id={id} label={humanize(s.type)} table={<StepRow s={s} to={to} />} note={s.failure && <FailureText failure={s.failure} />}>
+      {d?.gitopsUpdate && (
+        <Node
+          id={`${id}/update`}
+          label="GitOps update"
+          table={
+            <Row
+              label="GitOps update"
+              head={["GitOps update", "Repository", "Result"]}
+              cells={[<Link to={to!}>Update</Link>, d.gitopsUpdate.repository, <Sha12 sha={d.gitopsUpdate.resultingCommit} />]}
+            />
+          }
+        />
+      )}
+      {d?.reconciliation && (
+        <Node
+          id={`${id}/reconciliation`}
+          label="Reconciliation"
+          table={
+            <Row
+              label="Reconciliation"
+              head={["Reconciliation", "Target revision"]}
+              cells={[<Link to={to!}>Reconcile</Link>, <Sha12 sha={d.reconciliation.targetRevision} />]}
+            />
+          }
+        />
+      )}
+      {d?.execution && (
+        <ExecutionNode
+          id={id}
+          x={d.execution}
+          logPath={(tr, step) => appPath(appId, `${base}/tasks/${encodeURIComponent(tr)}/logs?step=${encodeURIComponent(step)}`)}
+        />
+      )}
+    </Node>
+  );
+}
+
+// DeployBranch is DEPLOY_<environment>: its Deployment and its own steps
+// (no Execution: a composite step). Live with the run.
+function DeployBranch({ appId, runId, s }: { appId: string; runId: string; s: DeliveryStep }) {
+  const depId = s.deployment?.id;
+  const dep: Resource<DeploymentDetail> = useResource(depId ? appPath(appId, `/deployments/${encodeURIComponent(depId)}`) : null, {
+    live: (e) => resource("DELIVERY_CHANGED", runId)(e),
+  });
+  const id = `s${s.position}`;
+  return (
+    <Node
+      id={id}
+      label={humanize(s.type)}
+      table={<StepRow s={s} to={depId ? `/applications/${appId}/deployments/${depId}` : undefined} />}
+      note={s.failure && <FailureText failure={s.failure} />}
+    >
+      {s.deployment && (
+        <Node
+          id={`${id}/deployment`}
+          label={`Deployment #${s.deployment.number}`}
+          table={
+            <Row
+              label="Deployment"
+              head={["Deployment", "Environment", "Status", "Tests"]}
+              cells={[
+                <DeploymentLink appId={appId} id={s.deployment.id} number={s.deployment.number} />,
+                <EnvironmentLabel environment={s.deployment.environment} />,
+                <Status status={s.deployment.status} />,
+                dep.data?.tests ? `${dep.data.tests.passed}/${dep.data.tests.total}` : <span className="muted">—</span>,
+              ]}
+            />
+          }
+        />
+      )}
+      {[...(s.steps ?? [])]
+        .sort((a, b) => a.position - b.position)
+        .map((c) => (
+          <ChildBranch key={c.type} appId={appId} runId={runId} parent={id} deploymentId={depId} s={c} />
+        ))}
+    </Node>
+  );
+}
+
+// DeliveryTree is the run's steps in order as a tree.
+export function DeliveryTree({ appId, run }: { appId: string; run: DeliveryDetail }) {
+  return (
+    <Tree label="Delivery tree">
+      {[...run.steps]
+        .sort((a, b) => a.position - b.position)
+        .map((s) =>
+          s.build || s.type === "BUILD_APPLICATION" ? (
+            <BuildBranch key={s.type} appId={appId} s={s} />
+          ) : s.deployment || s.steps ? (
+            <DeployBranch key={s.type} appId={appId} runId={run.id} s={s} />
+          ) : (
+            <Node key={s.type} id={`s${s.position}`} label={humanize(s.type)} table={<StepRow s={s} />} note={s.failure && <FailureText failure={s.failure} />} />
+          ),
+        )}
+    </Tree>
   );
 }
 
@@ -97,17 +334,19 @@ function Output({ d }: { d: DeliveryDetail }) {
         </Fact>
       </Facts>
     );
-  if (d.status === "FAILED" && !d.build?.image) return <p>No image: the build did not produce one.</p>;
+  if (d.status === "FAILED") return <p>No image: the build did not produce one.</p>;
   if (running(d.status)) return <p className="muted">Not built yet.</p>;
   return <p className="muted">No image.</p>;
 }
 
 // DeliveryPage is one DeliveryRun (by id or number): one immutable delivery
-// attempt of one push. Live: its run's invalidations.
+// attempt of one push, as a tree. Live: its run's invalidations; read again
+// every few seconds while it runs.
 export function DeliveryPage() {
   const { appId = "", runId = "" } = useParams();
   const r: Resource<DeliveryDetail> = useResource(appPath(appId, `/deliveries/${encodeURIComponent(runId)}`), {
     live: (e) => resource("DELIVERY_CHANGED", r.data?.id ?? runId)(e),
+    pollWhile: (d) => running(d.status),
   });
   return (
     <Page crumbs={<AppCrumbs appId={appId} section="deliveries" title="Delivery" />}>
@@ -149,7 +388,7 @@ export function DeliveryPage() {
               </Fact>
             </Facts>
             <h2>Steps</h2>
-            <Steps appId={appId} steps={d.steps} />
+            <DeliveryTree appId={appId} run={d} />
             <h2>Image</h2>
             <Output d={d} />
           </>

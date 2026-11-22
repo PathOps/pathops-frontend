@@ -27,7 +27,7 @@ export function stepPath(appId: string, deploymentId: string, type: string): str
 }
 
 // Steps are a Deployment's own steps in order: Update GitOps, Reconcile
-// (Validate later), each linking its details.
+// (Validate later); # links each step's page.
 function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
   return (
     <div className="scroll">
@@ -39,7 +39,6 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
             <th>Status</th>
             <th>Started</th>
             <th>Duration</th>
-            <th>Details</th>
           </tr>
         </thead>
         <tbody>
@@ -47,7 +46,7 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
             .sort((a, b) => a.position - b.position)
             .map((s: DeploymentStep) => (
               <tr key={s.type}>
-                <td>{s.position}</td>
+                <td>{s.startedAt ? <Link to={stepPath(appId, d.id, s.type)}>#{s.position}</Link> : `#${s.position}`}</td>
                 <td>{humanize(s.type)}</td>
                 <td>
                   <Status status={s.status} />
@@ -63,15 +62,6 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
                 </td>
                 <td>
                   <Duration seconds={s.durationSeconds} />
-                </td>
-                <td>
-                  {s.startedAt ? (
-                    <Link to={stepPath(appId, d.id, s.type)} aria-label={`${humanize(s.type)} details`}>
-                      Details
-                    </Link>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
                 </td>
               </tr>
             ))}

@@ -106,27 +106,29 @@ of the list shows its control disabled, a list of one page none.
   history. An environment is plain words: color is for statuses. Images copy
   each image's pinned reference (`repository@digest`) beside its tag.
 - **Delivery run** (Decision 0066): its facts (commit, source, trigger and
-  delivery id, times, error), its top-level steps in order (`# | Step |
-  Status | Started | Duration | Details`: Build application links its Build,
-  Deploy preflight its Deployment; a new step type appears without a UI
-  change; a failed step's error under it) and the OCI image (or "No image").
+  delivery id, times, error), then its steps as a tree, all open at first:
+  Build application with its Build and its Execution (Tekton: PipelineRun,
+  TaskRuns, Steps with live logs) as siblings; Deploy preflight with its
+  Deployment and its steps Update GitOps (GitOps update and Execution) and
+  Reconcile (Reconciliation and Execution: GitRepository, Kustomization).
+  Each node is a one-row table hung from its parent by a line; a node with
+  children has `[-]`/`[+]`; what a person closes stays closed while live
+  updates re-read the tree (not stored: a reload opens everything). The tree
+  shows only what tells what happened; every `#` links the page with all of
+  it (Build, Deployment, Update GitOps, Reconcile).
 - **Deployment**: `Deployment #N`: environment, status (and its error),
   commit, image (its digest, a copy of the reference and the Build that
   produced it), Tests (`—`), delivery, start, duration and GitOps commit (G);
-  then its steps, Update GitOps and Reconcile, each linking its page.
-- **Deployment step** (`/applications/<id>/deployments/<id>/steps/<TYPE>`):
-  Update GitOps shows its GitOpsUpdate (repository, base commit, resulting
-  commit) and its PipelineRun; Reconcile its Reconciliation (target revision,
-  G) and its Flux execution: baseline revision and the last observed
-  GitRepository and Kustomization (revision, generation, Ready, message; "did
-  not exist" or "not observed").
-- **Build** and **Update GitOps**: the PipelineRun as PathOps recorded it
-  (status, times, results named in words, where Tekton resolved it from),
-  its TaskRuns (each a facts table) and their steps, numbered in execution
-  order, with exit codes; the history stays after Tekton prunes it. Each
-  step's log (the last 4000 lines, at most 256 KiB, as the Tenant Control
-  Plane bounds it; read live, never stored, so "no longer available" once its
-  Pod is gone) opens in the row under the step, one at a time.
+  then its steps (`# | Step | Status | Started | Duration`, `#` links each).
+- **Build**, **Update GitOps** and **Reconcile** pages: the step (or Build),
+  then the projection (Build; GitOps update: repository, base commit,
+  resulting commit; Reconciliation: target revision), then the Execution's
+  generic facts (executor, status, times, reason, message), then the
+  engine's own: the PipelineRun (where Tekton resolved it from, trigger,
+  results), its TaskRuns and steps with exit codes and live logs ("no longer
+  available" once pruned); or Flux (namespace, baseline revision, last
+  observed) and the GitRepository and Kustomization, each its own key/value
+  table.
 - Every page of a Delivery, Build or Deployment reads the Tenant Control
   Plane's Application-scoped routes (`/applications/<id>/deliveries|builds|
   deployments/<uuid or number>`).

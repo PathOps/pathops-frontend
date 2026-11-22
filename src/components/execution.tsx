@@ -4,6 +4,11 @@ import type { Failure, FluxExecution, FluxObject, Log, RefSource, TaskRunRecord,
 import { useResource } from "../api/useResource";
 import { Copy, CopyButton, Duration, ErrorBox, Fact, Facts, Short, Status, Time, humanize, newestFirst, seconds, title } from "./ui";
 
+// The presentation of an Execution (Decision 0066 §4-§5): what the engine
+// reported, never PathOps' verdict (the step's) nor its accepted facts (the
+// projection's). Tekton and Flux share the generic Execution facts; below
+// them each has its own.
+
 // FailureText is a run's, step's or Deployment's failure: its reason, in
 // words, and its message.
 export function FailureText({ failure }: { failure: Failure }) {
@@ -15,6 +20,22 @@ export function FailureText({ failure }: { failure: Failure }) {
   );
 }
 
+// Sha12 is a commit SHA as its first 12 characters, the whole on hover.
+export function Sha12({ sha }: { sha?: string }) {
+  if (!sha) return <span className="muted">—</span>;
+  return <code title={sha}>{sha.slice(0, 12)}</code>;
+}
+
+// FullSha is a commit SHA shortened, the whole on hover and copy.
+export function FullSha({ sha, missing = "not yet" }: { sha?: string; missing?: string }) {
+  if (!sha) return <span className="muted">{missing}</span>;
+  return (
+    <Copy text={sha}>
+      <Short text={sha} />
+    </Copy>
+  );
+}
+
 // RefSourceText is where Tekton resolved a definition from: its revision
 // (and entry point), as Tekton reported it.
 export function RefSourceText({ source }: { source: RefSource | null }) {
@@ -22,9 +43,7 @@ export function RefSourceText({ source }: { source: RefSource | null }) {
   if (!source || !sha) return <span className="muted">not reported</span>;
   return (
     <>
-      <Copy text={sha}>
-        <Short text={sha} />
-      </Copy>
+      <FullSha sha={sha} />
       {source.entryPoint && (
         <>
           {" "}
@@ -35,128 +54,177 @@ export function RefSourceText({ source }: { source: RefSource | null }) {
   );
 }
 
-// LogPath is the API path of one step's log of one TaskRun.
-export type LogPath = (taskRun: string, step: string) => string;
+// executorName is an executor in words.
+export function executorName(executor: string): string {
+  return executor === "TEKTON" ? "Tekton" : executor === "FLUX" ? "Flux" : humanize(executor);
+}
 
-// TektonExecutionView is a Tekton Execution as PathOps recorded it:
-// PipelineRun -> TaskRuns -> Steps, each step's log read live (one open at a
-// time). Nothing here reads Tekton: the history stays after a prune; only a
-// log may be gone.
-export function TektonExecutionView({ x, logPath }: { x: TektonExecution; logPath: LogPath }) {
-  const [open, setOpen] = useState<string | null>(null);
+// ExecutionFacts are an Execution's generic facts: who executed it and what
+// it reported (Decision 0066 §4).
+export function ExecutionFacts({ x }: { x: TektonExecution | FluxExecution }) {
   return (
-    <>
-      <Facts label="PipelineRun">
-        <Fact label="PipelineRun">
-          <code>
-            {x.pipelineRun.namespace}/{x.pipelineRun.name}
-          </code>
-        </Fact>
-        <Fact label="Status">
-          <Status status={x.status} label={x.reason || x.status} />
-        </Fact>
-        {x.message && <Fact label="Message">{x.message}</Fact>}
-        <Fact label="Started">
-          <Time at={x.startedAt} />
-        </Fact>
-        <Fact label="Completed">
-          <Time at={x.completedAt} />
-        </Fact>
-        <Fact label="Duration">
-          <Duration seconds={seconds(x.startedAt, x.completedAt)} />
-        </Fact>
-        <Fact label="Resolved from">
-          <RefSourceText source={x.refSource} />
-        </Fact>
-        <Fact label="Trigger event">{x.triggerEventId ?? <span className="muted">—</span>}</Fact>
-        {x.results.map((r) => (
-          <Fact key={r.name} label={title(r.name)}>
-            <code>{r.value}</code>
-          </Fact>
-        ))}
-      </Facts>
-      <section aria-label="TaskRuns">
-        <h3>TaskRuns</h3>
-        {x.taskRuns.length === 0 ? (
-          <p className="muted">No TaskRun yet.</p>
-        ) : (
-          newestFirst(x.taskRuns).map((tr) => (
-            <TaskRun key={tr.name} tr={tr} logPath={logPath} open={open} onLog={(key) => setOpen(open === key ? null : key)} />
-          ))
-        )}
-      </section>
-    </>
+    <Facts label="Execution">
+      <Fact label="Executor">{executorName(x.executor)}</Fact>
+      <Fact label="Status">
+        <Status status={x.status} />
+      </Fact>
+      <Fact label="Started">
+        <Time at={x.startedAt} />
+      </Fact>
+      <Fact label="Completed">
+        <Time at={x.completedAt} />
+      </Fact>
+      <Fact label="Duration">
+        <Duration seconds={seconds(x.startedAt, x.completedAt)} />
+      </Fact>
+      <Fact label="Reason">{x.reason ? x.reason : <span className="muted">—</span>}</Fact>
+      <Fact label="Message">{x.message ? <span className="wrap">{x.message}</span> : <span className="muted">—</span>}</Fact>
+    </Facts>
   );
 }
 
-function TaskRun({ tr, logPath, open, onLog }: { tr: TaskRunRecord; logPath: LogPath; open: string | null; onLog: (key: string) => void }) {
+// PipelineRunFacts are what is Tekton's own of a Tekton Execution: the
+// PipelineRun, where Tekton resolved it from, its trigger and its results
+// (its status and times are the Execution's).
+export function PipelineRunFacts({ x }: { x: TektonExecution }) {
   return (
-    <div aria-label={`TaskRun ${tr.pipelineTask}`} role="group">
-      <h4>
-        {tr.pipelineTask} — {tr.observedAt ? <Status status={tr.status} label={tr.reason || tr.status} /> : <span className="muted">not observed</span>}
-      </h4>
-      <Facts label={`TaskRun ${tr.pipelineTask} facts`}>
-        <Fact label="TaskRun">
-          <code>{tr.name}</code>
+    <Facts label="PipelineRun">
+      <Fact label="PipelineRun">
+        <code>
+          {x.pipelineRun.namespace}/{x.pipelineRun.name}
+        </code>
+      </Fact>
+      {x.pipelineRun.uid && (
+        <Fact label="UID">
+          <code>{x.pipelineRun.uid}</code>
         </Fact>
-        {tr.task && <Fact label="Task">{tr.task}</Fact>}
-        <Fact label="Started">
-          <Time at={tr.startedAt} />
-        </Fact>
-        <Fact label="Duration">
-          <Duration seconds={seconds(tr.startedAt, tr.completedAt)} />
-        </Fact>
-        {tr.message && <Fact label="Message">{tr.message}</Fact>}
-      </Facts>
-      {tr.steps.length > 0 && (
-        <div className="scroll">
-          <table aria-label={`Steps of ${tr.pipelineTask}`}>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Step</th>
-                <th>State</th>
-                <th>Exit code</th>
-                <th>Duration</th>
-                <th>Log</th>
-              </tr>
-            </thead>
-            <tbody>
-              {newestFirst(tr.steps.map((s, i) => ({ ...s, order: i + 1 }))).map((s) => {
-                const key = `${tr.name}/${s.name}`;
-                return (
-                  <Fragment key={s.name}>
-                    <tr>
-                      <td>{s.order}</td>
-                      <td>{s.name}</td>
-                      <td>
-                        <Status status={s.exitCode === null ? s.state : s.exitCode === 0 ? "SUCCEEDED" : "FAILED"} label={s.reason || s.state} />
-                      </td>
-                      <td>{s.exitCode ?? "—"}</td>
-                      <td>
-                        <Duration seconds={seconds(s.startedAt, s.finishedAt)} />
-                      </td>
-                      <td>
-                        <button type="button" aria-expanded={open === key} onClick={() => onLog(key)}>
-                          {open === key ? "Hide log" : "View log"}
-                        </button>
-                      </td>
-                    </tr>
-                    {open === key && (
-                      <tr className="log-row">
-                        <td colSpan={6}>
-                          <LogViewer path={logPath(tr.name, s.name)} taskRun={tr.name} step={s.name} />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       )}
+      <Fact label="Resolved from">
+        <RefSourceText source={x.refSource} />
+      </Fact>
+      <Fact label="Trigger event">{x.triggerEventId ?? <span className="muted">—</span>}</Fact>
+      <Fact label="Triggered">
+        <Time at={x.triggeredAt} />
+      </Fact>
+      {x.results.map((r) => (
+        <Fact key={r.name} label={title(r.name)}>
+          <code>{r.value}</code>
+        </Fact>
+      ))}
+    </Facts>
+  );
+}
+
+// LogPath is the API path of one step's log of one TaskRun.
+export type LogPath = (taskRun: string, step: string) => string;
+
+// TektonStepsTable are a TaskRun's steps, numbered in execution order, latest
+// first, each with its log (read live) in the row under it when open.
+export function TektonStepsTable({
+  tr,
+  logPath,
+  open,
+  onLog,
+}: {
+  tr: TaskRunRecord;
+  logPath: LogPath;
+  open: string | null;
+  onLog: (key: string) => void;
+}) {
+  if (tr.steps.length === 0) return <p className="muted">No step yet.</p>;
+  return (
+    <div className="scroll">
+      <table aria-label={`Steps of ${tr.pipelineTask}`}>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Step</th>
+            <th>State</th>
+            <th>Exit code</th>
+            <th>Duration</th>
+            <th>Log</th>
+          </tr>
+        </thead>
+        <tbody>
+          {newestFirst(tr.steps.map((s, i) => ({ ...s, order: i + 1 }))).map((s) => {
+            const key = `${tr.name}/${s.name}`;
+            return (
+              <Fragment key={s.name}>
+                <tr>
+                  <td>{s.order}</td>
+                  <td>{s.name}</td>
+                  <td>
+                    <Status status={s.exitCode === null ? s.state : s.exitCode === 0 ? "SUCCEEDED" : "FAILED"} label={s.reason || s.state} />
+                  </td>
+                  <td>{s.exitCode ?? "—"}</td>
+                  <td>
+                    <Duration seconds={seconds(s.startedAt, s.finishedAt)} />
+                  </td>
+                  <td>
+                    <button type="button" aria-expanded={open === key} onClick={() => onLog(key)}>
+                      {open === key ? "Hide log" : "View log"}
+                    </button>
+                  </td>
+                </tr>
+                {open === key && (
+                  <tr className="log-row">
+                    <td colSpan={6}>
+                      <LogViewer path={logPath(tr.name, s.name)} taskRun={tr.name} step={s.name} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
+  );
+}
+
+// TaskRunsDetail are a Tekton Execution's TaskRuns, latest first, each with
+// its facts and its steps (one log open at a time).
+export function TaskRunsDetail({ x, logPath }: { x: TektonExecution; logPath: LogPath }) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <section aria-label="TaskRuns">
+      <h2>TaskRuns</h2>
+      {x.taskRuns.length === 0 ? (
+        <p className="muted">No TaskRun yet.</p>
+      ) : (
+        newestFirst(x.taskRuns).map((tr) => (
+          <div key={tr.name} aria-label={`TaskRun ${tr.pipelineTask}`} role="group">
+            <h3>
+              {tr.pipelineTask} — {tr.observedAt ? <Status status={tr.status} label={tr.reason || tr.status} /> : <span className="muted">not observed</span>}
+            </h3>
+            <Facts label={`TaskRun ${tr.pipelineTask} facts`}>
+              <Fact label="TaskRun">
+                <code>{tr.name}</code>
+              </Fact>
+              {tr.task && <Fact label="Task">{tr.task}</Fact>}
+              <Fact label="Started">
+                <Time at={tr.startedAt} />
+              </Fact>
+              <Fact label="Duration">
+                <Duration seconds={seconds(tr.startedAt, tr.completedAt)} />
+              </Fact>
+              {tr.message && <Fact label="Message">{tr.message}</Fact>}
+              {tr.refSource && (
+                <Fact label="Resolved from">
+                  <RefSourceText source={tr.refSource} />
+                </Fact>
+              )}
+              {tr.results.map((r) => (
+                <Fact key={r.name} label={title(r.name)}>
+                  <code>{r.value}</code>
+                </Fact>
+              ))}
+            </Facts>
+            <TektonStepsTable tr={tr} logPath={logPath} open={open} onLog={(key) => setOpen(open === key ? null : key)} />
+          </div>
+        ))
+      )}
+    </section>
   );
 }
 
@@ -218,118 +286,92 @@ export function LogViewer({ path, taskRun, step }: { path: string; taskRun: stri
   );
 }
 
-// Revision is a Flux revision (main@sha1:<sha>) as its commit's first 12
+// FluxRevision is a Flux revision (main@sha1:<sha>) as its commit's first 12
 // characters, the whole revision on hover.
-function Revision({ rev }: { rev?: string }) {
+export function FluxRevision({ rev }: { rev?: string }) {
   if (!rev) return <span className="muted">—</span>;
   const sha = rev.slice(rev.lastIndexOf(":") + 1);
   return <code title={rev}>{sha.slice(0, 12)}</code>;
 }
 
-function FluxRow({ kind, o }: { kind: string; o: FluxObject | null }) {
-  if (!o)
-    return (
-      <tr>
-        <td>{kind}</td>
-        <td colSpan={6} className="muted">
-          not observed
-        </td>
-      </tr>
-    );
-  if (!o.found)
-    return (
-      <tr>
-        <td>{kind}</td>
-        <td>
-          <code>{o.name}</code>
-        </td>
-        <td colSpan={4} className="muted">
-          did not exist
-        </td>
-        <td>
-          <Time at={o.observedAt} />
-        </td>
-      </tr>
-    );
+// FluxReady is a Flux object's Ready condition in words: Ready, Not ready or
+// Unknown.
+export function FluxReady({ o }: { o: FluxObject | null }) {
+  if (!o) return <span className="muted">not observed</span>;
+  if (!o.found) return <span className="muted">did not exist</span>;
+  if (!o.ready) return <span className="muted">—</span>;
+  const status = o.ready.status === "True" ? "SUCCEEDED" : o.ready.status === "False" ? "FAILED" : "RUNNING";
+  return <Status status={status} label={o.ready.status === "True" ? "Ready" : o.ready.status === "False" ? "Not ready" : "Unknown"} />;
+}
+
+// FluxFacts are what is Flux's own of a Flux Execution: where it observed,
+// from which source revision it started (baseline) and when it last saw a
+// change (its status and times are the Execution's).
+export function FluxFacts({ x }: { x: FluxExecution }) {
   return (
-    <tr>
-      <td>{kind}</td>
-      <td>
-        <code>{o.name}</code>
-      </td>
-      <td>
-        {kind === "GitRepository" ? (
-          <Revision rev={o.artifactRevision} />
-        ) : (
-          <>
-            <Revision rev={o.lastAttemptedRevision} /> / <Revision rev={o.lastAppliedRevision} />
-          </>
-        )}
-      </td>
-      <td>
-        {o.observedGeneration ?? "—"} / {o.generation ?? "—"}
-      </td>
-      <td>{o.ready ? <Status status={o.ready.status === "True" ? "SUCCEEDED" : o.ready.status === "False" ? "FAILED" : "RUNNING"} label={o.ready.reason || o.ready.status} /> : "—"}</td>
-      <td>{o.ready?.message ?? "—"}</td>
-      <td>
-        <Time at={o.observedAt} />
-      </td>
-    </tr>
+    <Facts label="Flux">
+      <Fact label="Namespace">
+        <code>{x.namespace}</code>
+      </Fact>
+      <Fact label="Baseline revision">
+        <FullSha sha={x.baselineRevision} missing="—" />
+      </Fact>
+      <Fact label="Last observed">
+        <Time at={x.observedAt} />
+      </Fact>
+    </Facts>
   );
 }
 
-// FluxExecutionView is a Flux Execution as PathOps recorded it: the source
-// revision Flux had when it started and the last observed state of its
-// GitRepository and Kustomization.
-export function FluxExecutionView({ x }: { x: FluxExecution }) {
+// FluxObjectDetail is one Flux object's last observed state as a key/value
+// table: the facts its snapshot has (a GitRepository's artifact revision, a
+// Kustomization's attempted and applied revisions). Never one table for both.
+export function FluxObjectDetail({ kind, o }: { kind: "GitRepository" | "Kustomization"; o: FluxObject | null }) {
   return (
-    <>
-      <Facts label="Flux execution">
-        <Fact label="Status">
-          <Status status={x.status} label={x.reason ? humanize(x.reason) : undefined} />
-        </Fact>
-        {x.message && <Fact label="Message">{x.message}</Fact>}
-        <Fact label="Namespace">
-          <code>{x.namespace}</code>
-        </Fact>
-        <Fact label="Baseline revision">
-          {x.baselineRevision ? (
-            <Copy text={x.baselineRevision}>
-              <Short text={x.baselineRevision} />
-            </Copy>
+    <section aria-label={kind}>
+      <h2>{kind}</h2>
+      {!o ? (
+        <p className="muted">Not observed.</p>
+      ) : (
+        <Facts label={kind}>
+          <Fact label="Name">
+            <code>{o.name}</code>
+          </Fact>
+          {!o.found ? (
+            <Fact label="State">
+              <span className="muted">did not exist</span>
+            </Fact>
           ) : (
-            <span className="muted">—</span>
+            <>
+              {kind === "GitRepository" ? (
+                <Fact label="Revision">
+                  <FluxRevision rev={o.artifactRevision} />
+                </Fact>
+              ) : (
+                <>
+                  <Fact label="Last attempted">
+                    <FluxRevision rev={o.lastAttemptedRevision} />
+                  </Fact>
+                  <Fact label="Last applied">
+                    <FluxRevision rev={o.lastAppliedRevision} />
+                  </Fact>
+                </>
+              )}
+              <Fact label="Generation">
+                {o.observedGeneration ?? "—"} / {o.generation ?? "—"}
+              </Fact>
+              <Fact label="Ready">
+                <FluxReady o={o} />
+              </Fact>
+              <Fact label="Reason">{o.ready?.reason ?? <span className="muted">—</span>}</Fact>
+              <Fact label="Message">{o.ready?.message ? <span className="wrap">{o.ready.message}</span> : <span className="muted">—</span>}</Fact>
+            </>
           )}
-        </Fact>
-        <Fact label="Started">
-          <Time at={x.startedAt} />
-        </Fact>
-        <Fact label="Completed">
-          <Time at={x.completedAt} />
-        </Fact>
-        <Fact label="Last observed">
-          <Time at={x.observedAt} />
-        </Fact>
-      </Facts>
-      <div className="scroll">
-        <table aria-label="Flux objects">
-          <thead>
-            <tr>
-              <th>Object</th>
-              <th>Name</th>
-              <th>Revision</th>
-              <th>Generation</th>
-              <th>Ready</th>
-              <th>Message</th>
-              <th>Observed</th>
-            </tr>
-          </thead>
-          <tbody>
-            <FluxRow kind="GitRepository" o={x.gitRepository} />
-            <FluxRow kind="Kustomization" o={x.kustomization} />
-          </tbody>
-        </table>
-      </div>
-    </>
+          <Fact label="Observed">
+            <Time at={o.observedAt} />
+          </Fact>
+        </Facts>
+      )}
+    </section>
   );
 }

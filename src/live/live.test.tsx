@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ApiContext, type Api } from "../api/client";
@@ -136,6 +137,9 @@ function table() {
     [`${app}/deliveries`]: { ...f.deliveries, previousCursor: null, nextCursor: null },
     [`${app}/deliveries/run-ok`]: f.deliveryOk,
     [`${app}/builds/build-ok`]: f.buildOk,
+    [`${app}/deployments/dep-1`]: f.deploymentDetail,
+    [`${app}/deployments/dep-1/steps/UPDATE_GITOPS`]: f.updateStep,
+    [`${app}/deployments/dep-1/steps/RECONCILE`]: f.reconcileStep,
     "/api/v1/inbox?unread=true&limit=1": { messages: [], unread: 0, previousCursor: null, nextCursor: null },
     "/api/v1/inbox": { messages: [], unread: 0, previousCursor: null, nextCursor: null },
     "/api/v1/applications": f.applications,
@@ -333,6 +337,26 @@ describe("Live updates", () => {
     act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
     await waitFor(() => expect(count(api, path)).toBe(before + 1));
     expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+  });
+
+  it("a live update of a Delivery re-reads its tree and keeps what the person collapsed", async () => {
+    const source = fakeSource();
+    const api = fakeApi(table());
+    renderLive(`/applications/${f.appId}/deliveries/run-ok`, api, source);
+    const tree = await screen.findByRole("tree", { name: "Delivery tree" });
+    await waitFor(() => expect(within(tree).getAllByRole("treeitem", { name: /^PipelineRun / })).toHaveLength(2));
+    const c = await connected(source);
+    await userEvent.click(within(tree).getAllByRole("button", { name: "Collapse Execution Tekton" })[0]);
+    await userEvent.click(within(tree).getByRole("button", { name: "Collapse Reconcile" }));
+    const paths = [`${app}/deliveries/run-ok`, `${app}/deployments/dep-1/steps/RECONCILE`];
+    const before = paths.map((p) => count(api, p));
+    act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
+    await waitFor(() => expect(count(api, paths[0])).toBe(before[0] + 1));
+    await waitFor(() => expect(count(api, paths[1])).toBe(before[1] + 1));
+    // Still collapsed: one PipelineRun (Update GitOps'), no Kustomization.
+    expect(within(tree).getAllByRole("treeitem", { name: /^PipelineRun / })).toHaveLength(1);
+    expect(within(tree).queryByRole("treeitem", { name: "Kustomization" })).toBeNull();
+    expect(within(tree).getByRole("button", { name: "Expand Reconcile" })).toHaveTextContent("[+]");
   });
 
   it("the Inbox badge follows INBOX_CHANGED on any page; the Inbox list too, without a Refresh", async () => {

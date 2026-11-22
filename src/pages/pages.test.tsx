@@ -30,7 +30,19 @@ const all = {
   [`${app}/builds/build-bad/tasks/build-b-lint/logs?step=checkout`]: f.logOf("build-b-lint", "checkout", "lint checkout ok"),
   [`${app}/builds/build-bad/tasks/build-b-build-image/logs?step=checkout`]: f.logOf("build-b-build-image", "checkout", "image checkout ok"),
   [`${app}/builds/build-bad/tasks/build-b-build-image/logs?step=build`]: f.logOf("build-b-build-image", "build", "ERROR: failed to solve"),
+  [`${app}/deployments/dep-1`]: f.deploymentDetail,
+  [`${app}/deployments/dep-1/steps/UPDATE_GITOPS`]: f.updateStep,
+  [`${app}/deployments/dep-1/steps/RECONCILE`]: f.reconcileStep,
+  [`${app}/deployments/dep-1/steps/UPDATE_GITOPS/tasks/update-preflight-dep-1-update/logs?step=push`]: f.logOf(
+    "update-preflight-dep-1-update",
+    "push",
+    "pushed " + f.gitopsG,
+  ),
 };
+
+// children are a tree node's own child nodes (not their descendants).
+const children = (node: HTMLElement) => Array.from(node.querySelectorAll(":scope > ul > li[role=treeitem]")) as HTMLElement[];
+const names = (node: HTMLElement) => children(node).map((c) => c.getAttribute("aria-label"));
 
 describe("Applications", () => {
   it("shows loading, then the user's Applications as a table", async () => {
@@ -185,33 +197,106 @@ describe("Application", () => {
 });
 
 describe("Delivery run", () => {
-  it("shows a succeeded run: its facts, its top-level steps and the image", async () => {
+  const tree = async () => screen.findByRole("tree", { name: "Delivery tree" });
+  const top = (t: HTMLElement, name: string) =>
+    (Array.from(t.querySelectorAll(":scope > li[role=treeitem]")) as HTMLElement[]).find((n) => n.getAttribute("aria-label") === name)!;
+
+  it("is a tree, all open: each step's projection and Execution are siblings; Tekton's PipelineRun, TaskRuns and Steps, Flux's two objects", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
     expect(await screen.findByRole("heading", { level: 1, name: "Delivery #1" })).toBeInTheDocument();
-    const facts = screen.getByRole("table", { name: "Delivery run" });
-    expect(facts).toHaveTextContent(f.okRev);
-    expect(within(facts).getAllByRole("rowheader")[0]).toHaveTextContent("Run ID");
-    expect(within(facts).getByRole("row", { name: /^Trigger/ })).toHaveTextContent("Push wd-1");
-    const steps = screen.getByRole("table", { name: "Delivery steps" });
-    expect(within(steps).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["#", "Step", "Status", "Started", "Duration", "Details"]);
-    const rows = within(steps).getAllByRole("row").slice(1);
-    // Only the top-level steps, in order: a Deployment's own steps are its page's.
-    expect(rows.map((r) => within(r).getAllByRole("cell")[1].textContent)).toEqual(["Build application", "Deploy preflight"]);
-    expect(steps).not.toHaveTextContent("Update gitops");
-    expect(steps).not.toHaveTextContent("Reconcile");
-    expect(within(rows[0]).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
-    expect(within(rows[1]).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deployments/dep-1`);
-    expect(rows[1]).toHaveTextContent("Preflight");
-    expect(screen.getByRole("table", { name: "Image" })).toHaveTextContent(f.digest);
+    expect(within(screen.getByRole("table", { name: "Delivery run" })).getByRole("row", { name: /^Trigger/ })).toHaveTextContent("Push wd-1");
+    const t = await tree();
+    expect((Array.from(t.querySelectorAll(":scope > li")) as HTMLElement[]).map((n) => n.getAttribute("aria-label"))).toEqual([
+      "Build application",
+      "Deploy preflight",
+    ]);
+    const build = top(t, "Build application");
+    await waitFor(() => expect(names(build)).toEqual(["Build #1", "Execution Tekton"]));
+    const exec = children(build)[1];
+    const pr = await waitFor(() => children(exec)[0]);
+    expect(pr).toHaveAttribute("aria-label", "PipelineRun build-build-ok");
+    const tr = children(pr)[0];
+    expect(tr).toHaveAttribute("aria-label", "TaskRun build-image");
+    expect(within(tr).getByRole("table", { name: "Steps of build-image" })).toHaveTextContent("checkout");
+    const deploy = top(t, "Deploy preflight");
+    expect(names(deploy)).toEqual(["Deployment #1", "Update gitops", "Reconcile"]);
+    const [, update, reconcile] = children(deploy);
+    await waitFor(() => expect(names(update)).toEqual(["GitOps update", "Execution Tekton"]));
+    expect(within(children(update)[0]).getByRole("table", { name: "GitOps update" })).toHaveTextContent(f.gitopsG.slice(0, 12));
+    expect(names(children(update)[1])).toEqual(["PipelineRun update-preflight-dep-1"]);
+    await waitFor(() => expect(names(reconcile)).toEqual(["Reconciliation", "Execution Flux"]));
+    expect(names(children(reconcile)[1])).toEqual(["GitRepository", "Kustomization"]);
+    expect(within(children(children(reconcile)[1])[1]).getByRole("table", { name: "Kustomization" })).toHaveTextContent("Ready");
+    // Everything starts open.
+    for (const b of within(t).getAllByRole("button", { name: /^(Collapse|Expand) / })) expect(b).toHaveTextContent("[-]");
+  });
+
+  it("links every # to its page: Build, Deployment, Update GitOps, Reconcile", async () => {
+    renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
+    const t = await tree();
+    const step = (name: string) => within(t).getAllByRole("table", { name: `Step ${name}` })[0];
+    expect(within(step("Build application")).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
+    expect(within(step("Deploy preflight")).getByRole("link", { name: "#2" })).toHaveAttribute("href", `/applications/${f.appId}/deployments/dep-1`);
+    expect(within(step("Update gitops")).getByRole("link", { name: "#1" })).toHaveAttribute(
+      "href",
+      `/applications/${f.appId}/deployments/dep-1/steps/UPDATE_GITOPS`,
+    );
+    expect(within(step("Reconcile")).getByRole("link", { name: "#2" })).toHaveAttribute("href", `/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`);
+    expect(within(within(t).getByRole("table", { name: "Build" })).getByRole("link", { name: "#1" })).toHaveAttribute(
+      "href",
+      `/applications/${f.appId}/builds/build-ok`,
+    );
+    expect(within(within(t).getByRole("table", { name: "Deployment" })).getByRole("link", { name: "#1" })).toHaveAttribute(
+      "href",
+      `/applications/${f.appId}/deployments/dep-1`,
+    );
+    // No Details column: the steps' tables are # Step Status Started Duration.
+    expect(within(step("Build application")).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["#", "Step", "Status", "Started", "Duration"]);
+  });
+
+  it("shows only what tells what happened: no digest, PipelineRun uid, trigger event, refSource, baseline or base commit", async () => {
+    renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
+    const t = await tree();
+    await waitFor(() => expect(within(t).getAllByRole("treeitem", { name: "Kustomization" })).toHaveLength(1));
+    for (const gone of ["uid-build-build-ok", "event-1", f.baseCommit.slice(0, 12), ".pathops/tekton", "Applied revision"]) expect(t).not.toHaveTextContent(gone);
+    expect(within(t).getByRole("table", { name: "Build" })).not.toHaveTextContent(f.digest);
+  });
+
+  it("collapses and expands one node: its siblings and the other branches stay as they were", async () => {
+    renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
+    const t = await tree();
+    await waitFor(() => expect(within(t).getAllByRole("treeitem", { name: /^PipelineRun / })).toHaveLength(2));
+    const build = top(t, "Build application");
+    const exec = children(build)[1];
+    await userEvent.click(within(exec).getAllByRole("button", { name: "Collapse Execution Tekton" })[0]);
+    expect(within(exec).getByRole("button", { name: "Expand Execution Tekton" })).toHaveTextContent("[+]");
+    expect(children(exec)).toHaveLength(0);
+    // Its sibling Build #1 and the Update GitOps Execution are untouched.
+    expect(names(build)).toEqual(["Build #1", "Execution Tekton"]);
+    expect(within(t).getAllByRole("treeitem", { name: /^PipelineRun / })).toHaveLength(1);
+    await userEvent.click(within(top(t, "Deploy preflight")).getByRole("button", { name: "Collapse Reconcile" }));
+    expect(within(t).queryByRole("treeitem", { name: "Kustomization" })).toBeNull();
+    expect(within(t).getByRole("treeitem", { name: "GitOps update" })).toBeInTheDocument();
+    await userEvent.click(within(exec).getByRole("button", { name: "Expand Execution Tekton" }));
+    expect(names(exec)).toEqual(["PipelineRun build-build-ok"]);
+  });
+
+  it("opens a step's log in the tree, live", async () => {
+    renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
+    const t = await tree();
+    const update = await waitFor(() => within(t).getByRole("table", { name: "Steps of update-preflight-gitops" }));
+    await userEvent.click(within(within(update).getByRole("cell", { name: "push" }).closest("tr")!).getByRole("button", { name: "View log" }));
+    expect(await within(t).findByRole("log", { name: "Log of push" })).toHaveTextContent("pushed " + f.gitopsG);
   });
 
   it("shows a failed run's error, the failed step's under it, and no image", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
     expect(await screen.findByRole("alert")).toHaveTextContent("Build failed: the PipelineRun manual-web-build/build-b failed (Failed)");
-    const steps = screen.getByRole("table", { name: "Delivery steps" });
-    expect(within(steps).getAllByRole("row")[2]).toHaveTextContent("Build failed: the PipelineRun manual-web-build/build-b failed (Failed)");
+    const t = await tree();
+    expect(top(t, "Build application")).toHaveTextContent("Build failed: the PipelineRun manual-web-build/build-b failed (Failed)");
+    // The failed Execution says why.
+    await waitFor(() => expect(within(t).getByRole("table", { name: "Execution Tekton" })).toHaveTextContent("Failed"));
     expect(screen.getByText("No image: the build did not produce one.")).toBeInTheDocument();
-    expect(screen.queryByRole("table", { name: "Image" })).toBeNull();
   });
 
   it("renders the top-level steps the Tenant CP returns in order, including types it does not know yet", async () => {
@@ -219,12 +304,15 @@ describe("Delivery run", () => {
       ...f.deliveryOk,
       status: "RUNNING",
       completedAt: null,
-      steps: [{ ...f.deliveryOk.steps[0], position: 3, type: "DEPLOY_PRODUCTION", status: "PENDING", build: undefined }, ...f.deliveryOk.steps],
+      steps: [{ ...f.deliveryOk.steps[0], position: 3, type: "DEPLOY_PRODUCTION", status: "PENDING", build: undefined, steps: undefined, deployment: undefined }, ...f.deliveryOk.steps],
     };
-    renderAt(`/applications/${f.appId}/deliveries/run-x`, fakeApi({ [`${app}/deliveries/run-x`]: future }));
-    const steps = await screen.findByRole("table", { name: "Delivery steps" });
-    const rows = within(steps).getAllByRole("row").slice(1);
-    expect(rows.map((r) => within(r).getAllByRole("cell")[1].textContent)).toEqual(["Build application", "Deploy preflight", "Deploy production"]);
+    renderAt(`/applications/${f.appId}/deliveries/run-x`, fakeApi({ ...all, [`${app}/deliveries/run-x`]: future }));
+    const t = await tree();
+    expect((Array.from(t.querySelectorAll(":scope > li")) as HTMLElement[]).map((n) => n.getAttribute("aria-label"))).toEqual([
+      "Build application",
+      "Deploy preflight",
+      "Deploy production",
+    ]);
   });
 
   it("is read by number too: /deliveries/1 is the same run", async () => {
@@ -241,8 +329,14 @@ describe("Build", () => {
     expect(within(facts).getAllByRole("rowheader")[0]).toHaveTextContent("Build ID");
     const delivery = within(facts).getByRole("row", { name: /^Delivery/ });
     expect(within(delivery).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
+    // Build (what PathOps accepted), then Execution (generic), then the PipelineRun (Tekton's own).
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent).slice(0, 3)).toEqual(["Execution", "PipelineRun", "TaskRuns"]);
+    const x = screen.getByRole("table", { name: "Execution" });
+    expect(within(x).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["Executor", "Status", "Started", "Completed", "Duration", "Reason", "Message"]);
+    expect(x).toHaveTextContent("Tekton");
     const pr = screen.getByRole("table", { name: "PipelineRun" });
     expect(pr).toHaveTextContent("manual-web-build/build-build-ok");
+    expect(within(pr).queryByRole("rowheader", { name: "Status" })).toBeNull();
     expect(within(pr).getByRole("rowheader", { name: "Image Digest" })).toBeInTheDocument();
     // Where Tekton resolved the Pipeline from (its provenance).
     expect(within(within(pr).getByRole("row", { name: /^Resolved from/ })).getByTitle(f.okRev)).toBeInTheDocument();
@@ -285,8 +379,7 @@ describe("Build", () => {
     renderAt(`/applications/${f.appId}/builds/build-bad`, fakeApi(all));
     const facts = await screen.findByRole("table", { name: "Build" });
     expect(facts).toHaveTextContent("Build failed: the PipelineRun manual-web-build/build-b failed (Failed)");
-    const pr = screen.getByRole("table", { name: "PipelineRun" });
-    expect(pr).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
+    expect(screen.getByRole("table", { name: "Execution" })).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
     const lint = screen.getByRole("group", { name: "TaskRun lint" });
     const image = screen.getByRole("group", { name: "TaskRun build-image" });
     expect(within(image).getByRole("cell", { name: "build" }).closest("tr")).toHaveTextContent("1");
@@ -1018,16 +1111,12 @@ describe("Deployment page", () => {
       `/applications/${f.appId}/deliveries/run-ok`,
     ]);
     const steps = screen.getByRole("table", { name: "Deployment steps" });
+    // No Details column: # links each step's page.
+    expect(within(steps).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["#", "Step", "Status", "Started", "Duration"]);
     const rows = within(steps).getAllByRole("row").slice(1);
     expect(rows.map((r) => within(r).getAllByRole("cell")[1].textContent)).toEqual(["Update gitops", "Reconcile"]);
-    expect(within(rows[0]).getByRole("link", { name: "Update gitops details" })).toHaveAttribute(
-      "href",
-      `/applications/${f.appId}/deployments/dep-1/steps/UPDATE_GITOPS`,
-    );
-    expect(within(rows[1]).getByRole("link", { name: "Reconcile details" })).toHaveAttribute(
-      "href",
-      `/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`,
-    );
+    expect(within(rows[0]).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deployments/dep-1/steps/UPDATE_GITOPS`);
+    expect(within(rows[1]).getByRole("link", { name: "#2" })).toHaveAttribute("href", `/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`);
   });
 
   it("is a real route; another user's or an unknown Deployment is not found", async () => {
@@ -1063,6 +1152,8 @@ describe("Deployment page", () => {
     expect(update).toHaveTextContent("alice/hello-gitops-preflight");
     expect(within(within(update).getByRole("row", { name: /^Base commit/ })).getByTitle(f.baseCommit)).toBeInTheDocument();
     expect(within(within(update).getByRole("row", { name: /^Resulting commit/ })).getByTitle(f.gitopsG)).toBeInTheDocument();
+    // GitOps update (domain), then Execution, then the PipelineRun (execution).
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["GitOps update", "Execution", "PipelineRun", "TaskRuns"]);
     const pr = screen.getByRole("table", { name: "PipelineRun" });
     expect(pr).toHaveTextContent("hello-preflight-update/update-preflight-dep-1");
     expect(within(within(pr).getByRole("row", { name: /^Resolved from/ })).getByTitle(f.baseCommit)).toBeInTheDocument();
@@ -1073,24 +1164,42 @@ describe("Deployment page", () => {
     expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deployments/dep-1`);
   });
 
-  it("Reconcile: its target (G), the Flux execution's baseline and the GitRepository and Kustomization snapshots", async () => {
+  it("Reconcile: Reconciliation, Execution, Flux, then GitRepository and Kustomization each its own key/value table", async () => {
     renderAt(`/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`, api());
     expect(await screen.findByRole("heading", { level: 1, name: "Reconcile — Deployment #1" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "Reconciliation",
+      "Execution",
+      "Flux",
+      "GitRepository",
+      "Kustomization",
+    ]);
     expect(within(screen.getByRole("table", { name: "Reconciliation" })).getByTitle(f.gitopsG)).toBeInTheDocument();
-    const flux = screen.getByRole("table", { name: "Flux execution" });
+    const x = screen.getByRole("table", { name: "Execution" });
+    expect(within(x).getByRole("row", { name: /^Executor/ })).toHaveTextContent("Flux");
+    expect(within(within(x).getByRole("row", { name: /^Status/ })).getByText("Succeeded")).toHaveClass("status-ok");
+    const flux = screen.getByRole("table", { name: "Flux" });
+    expect(within(flux).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["Namespace", "Baseline revision", "Last observed"]);
     expect(within(within(flux).getByRole("row", { name: /^Baseline revision/ })).getByTitle(f.baseCommit)).toBeInTheDocument();
-    expect(flux).toHaveTextContent("hello-preflight-deploy");
-    const objects = screen.getByRole("table", { name: "Flux objects" });
-    const [gr, ks] = within(objects).getAllByRole("row").slice(1);
-    expect(gr).toHaveTextContent("GitRepository");
-    expect(gr).toHaveTextContent("hello-gitops-preflight");
+    const gr = screen.getByRole("table", { name: "GitRepository" });
+    expect(within(gr).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["Name", "Revision", "Generation", "Ready", "Reason", "Message", "Observed"]);
     expect(within(gr).getByTitle(`main@sha1:${f.gitopsG}`)).toHaveTextContent(f.gitopsG.slice(0, 12));
-    expect(within(within(flux).getByRole("row", { name: /^Status/ })).getByText("Succeeded")).toHaveClass("status-ok");
-    expect(ks).toHaveTextContent("Kustomization");
+    const ks = screen.getByRole("table", { name: "Kustomization" });
+    expect(within(ks).getAllByRole("rowheader").map((h) => h.textContent)).toEqual([
+      "Name",
+      "Last attempted",
+      "Last applied",
+      "Generation",
+      "Ready",
+      "Reason",
+      "Message",
+      "Observed",
+    ]);
     expect(ks).toHaveTextContent("ReconciliationSucceeded");
-    expect(ks).toHaveTextContent("Applied revision");
-    expect(ks).toHaveTextContent("2 / 2");
-    // No logs: Flux has no TaskRuns.
+    expect(within(within(ks).getByRole("row", { name: /^Message/ })).getByText(/Applied revision/)).toHaveClass("wrap");
+    expect(within(within(ks).getByRole("row", { name: /^Generation/ })).getByRole("cell")).toHaveTextContent("2 / 2");
+    // No combined table, no TaskRuns.
+    expect(screen.queryByRole("table", { name: "Flux objects" })).toBeNull();
     expect(screen.queryByRole("region", { name: "TaskRuns" })).toBeNull();
   });
 
@@ -1098,10 +1207,8 @@ describe("Deployment page", () => {
     const x = f.reconcileStep.execution as import("../api/types").FluxExecution;
     const step = { ...f.reconcileStep, status: "RUNNING", execution: { ...x, gitRepository: { ...x.gitRepository!, found: false }, kustomization: null } };
     renderAt(`/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`, fakeApi({ ...all, [`${app}/deployments/dep-1/steps/RECONCILE`]: step }));
-    const objects = await screen.findByRole("table", { name: "Flux objects" });
-    const [gr, ks] = within(objects).getAllByRole("row").slice(1);
-    expect(gr).toHaveTextContent("did not exist");
-    expect(ks).toHaveTextContent("not observed");
+    expect(await screen.findByRole("table", { name: "GitRepository" })).toHaveTextContent("did not exist");
+    expect(within(screen.getByRole("region", { name: "Kustomization" })).getByText("Not observed.")).toBeInTheDocument();
   });
 });
 

@@ -1,26 +1,28 @@
 import { Link, useParams } from "react-router-dom";
 import type { DeploymentStepDetail, FluxExecution, Overview, TektonExecution } from "../api/types";
 import { running, useResource, type Resource } from "../api/useResource";
-import { FailureText, FluxExecutionView, TektonExecutionView } from "../components/execution";
+import {
+  ExecutionFacts,
+  FailureText,
+  FluxFacts,
+  FluxObjectDetail,
+  FullSha,
+  PipelineRunFacts,
+  TaskRunsDetail,
+} from "../components/execution";
 import { Page } from "../components/Page";
-import { Copy, Duration, Fact, Facts, Loaded, Short, Status, Time, humanize } from "../components/ui";
+import { Duration, Fact, Facts, Loaded, Status, Time, humanize } from "../components/ui";
 import { appPath } from "./BuildPage";
 
-function Sha({ sha }: { sha?: string }) {
-  if (!sha) return <span className="muted">not yet</span>;
-  return (
-    <Copy text={sha}>
-      <Short text={sha} />
-    </Copy>
-  );
-}
-
-// DeploymentStepPage is one step of a Deployment (Decision 0066): its
-// verdict, its own facts (the GitOpsUpdate's repository, base and resulting
-// commit; the Reconciliation's target) and its Execution as PathOps
-// recorded it (Tekton: PipelineRun -> TaskRuns -> Steps, logs live; Flux:
-// the GitRepository and Kustomization snapshots). Live with its
-// Deployment's run; read again every few seconds while it runs.
+// DeploymentStepPage is one step of a Deployment (Decision 0066), all of
+// what PathOps recorded of it, in this order: the step (PathOps' verdict);
+// its projection (what PathOps accepted: the GitOps update's repository,
+// base and resulting commit; the Reconciliation's target); its Execution
+// (what the engine reported: the generic facts first, then the engine's
+// own: Tekton's PipelineRun, TaskRuns and Steps with live logs; Flux's
+// namespace and baseline, then its GitRepository and Kustomization, each
+// its own table). Live with its Deployment's run; read again every few
+// seconds while it runs.
 export function DeploymentStepPage() {
   const { appId = "", deploymentId = "", type = "" } = useParams();
   const o = useResource<Overview>(appPath(appId, "/overview"));
@@ -77,10 +79,10 @@ export function DeploymentStepPage() {
                 <Facts label="GitOps update">
                   <Fact label="Repository">{d.gitopsUpdate.repository}</Fact>
                   <Fact label="Base commit">
-                    <Sha sha={d.gitopsUpdate.baseCommit} />
+                    <FullSha sha={d.gitopsUpdate.baseCommit} />
                   </Fact>
                   <Fact label="Resulting commit">
-                    <Sha sha={d.gitopsUpdate.resultingCommit} />
+                    <FullSha sha={d.gitopsUpdate.resultingCommit} />
                   </Fact>
                 </Facts>
               </>
@@ -90,25 +92,34 @@ export function DeploymentStepPage() {
                 <h2>Reconciliation</h2>
                 <Facts label="Reconciliation">
                   <Fact label="Target revision">
-                    <Sha sha={d.reconciliation.targetRevision} />
+                    <FullSha sha={d.reconciliation.targetRevision} />
                   </Fact>
                 </Facts>
               </>
             )}
             {!d.execution ? (
               <p className="muted">No execution yet.</p>
-            ) : d.execution.executor === "FLUX" ? (
-              <>
-                <h2>Flux</h2>
-                <FluxExecutionView x={d.execution as FluxExecution} />
-              </>
             ) : (
               <>
-                <h2>PipelineRun</h2>
-                <TektonExecutionView
-                  x={d.execution as TektonExecution}
-                  logPath={(tr, step) => appPath(appId, `${base}/tasks/${encodeURIComponent(tr)}/logs?step=${encodeURIComponent(step)}`)}
-                />
+                <h2>Execution</h2>
+                <ExecutionFacts x={d.execution} />
+                {d.execution.executor === "FLUX" ? (
+                  <>
+                    <h2>Flux</h2>
+                    <FluxFacts x={d.execution as FluxExecution} />
+                    <FluxObjectDetail kind="GitRepository" o={(d.execution as FluxExecution).gitRepository} />
+                    <FluxObjectDetail kind="Kustomization" o={(d.execution as FluxExecution).kustomization} />
+                  </>
+                ) : (
+                  <>
+                    <h2>PipelineRun</h2>
+                    <PipelineRunFacts x={d.execution as TektonExecution} />
+                    <TaskRunsDetail
+                      x={d.execution as TektonExecution}
+                      logPath={(tr, step) => appPath(appId, `${base}/tasks/${encodeURIComponent(tr)}/logs?step=${encodeURIComponent(step)}`)}
+                    />
+                  </>
+                )}
               </>
             )}
           </>

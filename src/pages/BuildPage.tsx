@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import type { BuildDetail, Overview } from "../api/types";
 import { running, useResource, type Resource } from "../api/useResource";
-import { FailureText, TektonExecutionView } from "../components/execution";
+import { ExecutionFacts, FailureText, PipelineRunFacts, TaskRunsDetail } from "../components/execution";
 import { Page } from "../components/Page";
 import { Copy, Duration, Fact, Facts, Loaded, RunLink, Status, Time } from "../components/ui";
 import { resource } from "../live/topics";
@@ -24,8 +24,9 @@ export function appPath(appId: string, rest: string): string {
   return `/api/v1/applications/${encodeURIComponent(appId)}${rest}`;
 }
 
-// BuildPage is one Build (by id or number) and its Tekton Execution as
-// PathOps recorded it: PipelineRun -> TaskRuns -> Steps, logs live. Live:
+// BuildPage is one Build (by id or number): the Build (what PathOps
+// accepted), then its Execution (what Tekton reported: the generic facts,
+// then the PipelineRun's own, TaskRuns and Steps, logs live). Live:
 // this build's invalidations; while it runs, also read again every few
 // seconds.
 export function BuildPage() {
@@ -74,14 +75,19 @@ export function BuildPage() {
                 </Fact>
               )}
             </Facts>
-            <h2>PipelineRun</h2>
             {d.execution ? (
-              <TektonExecutionView
-                x={d.execution}
-                logPath={(tr, step) =>
-                  appPath(appId, `/builds/${encodeURIComponent(d.id)}/tasks/${encodeURIComponent(tr)}/logs?step=${encodeURIComponent(step)}`)
-                }
-              />
+              <>
+                <h2>Execution</h2>
+                <ExecutionFacts x={d.execution} />
+                <h2>PipelineRun</h2>
+                <PipelineRunFacts x={d.execution} />
+                <TaskRunsDetail
+                  x={d.execution}
+                  logPath={(tr, step) =>
+                    appPath(appId, `/builds/${encodeURIComponent(d.id)}/tasks/${encodeURIComponent(tr)}/logs?step=${encodeURIComponent(step)}`)
+                  }
+                />
+              </>
             ) : (
               <p className="muted">Not dispatched.</p>
             )}

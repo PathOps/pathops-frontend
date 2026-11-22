@@ -239,58 +239,82 @@ small,
   width: 1.2em;
   text-align: left;
 }
-/* A level of a delivery step's build: the Build, its PipelineRun, its
-   TaskRuns, their steps. Each level is a short indent in, hung from its
-   parent by a discreet dashed right angle that ends at the child's header;
-   between sibling TaskRuns the line runs on to the last one only. Each level
-   is its own formatting context, so its tables' margins stay inside it and
-   the angles line up. */
-.level .level,
-.level .level > [role="group"] {
+/* The Delivery tree (Decision 0066): each node a one-row table with its
+   [-]/[+] toggle, hung from its parent by solid lines: an elbow to each
+   child, a vertical line on to the next sibling, none after the last. */
+.tree,
+.tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tree ul {
+  margin-left: 13px;
+}
+.tree ul > li {
   position: relative;
-  display: flow-root;
+  padding-left: 20px;
 }
-.level .level {
-  margin-left: 10px;
-  padding-left: 14px;
-}
-.level .level::before,
-.level .level > [role="group"]::before {
+.tree ul > li::before {
   content: "";
   position: absolute;
-  top: -8px;
-  height: 36px;
-  width: 12px;
-  border-left: 1px dashed var(--border);
-  border-bottom: 1px dashed var(--border);
-}
-.level .level::before {
   left: 0;
-}
-.level .level:has(> [role="group"])::before {
-  display: none;
-}
-.level .level > [role="group"]::before {
-  left: -14px;
-}
-.level .level > [role="group"] + [role="group"]::before {
   top: 0;
-  height: 28px;
+  width: 16px;
+  height: 27px;
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
-.level .level > [role="group"]:not(:last-child)::after {
+.tree ul > li:not(:last-child)::after {
   content: "";
   position: absolute;
-  left: -14px;
-  top: 28px;
+  left: 0;
+  top: 27px;
   bottom: 0;
-  border-left: 1px dashed var(--border);
+  border-left: 1px solid var(--border);
 }
-.level table {
-  margin: 8px 0;
+.tree-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
 }
-.level th,
-.level strong {
+.tree-body {
+  min-width: 0;
+}
+.tree-toggle {
+  flex: none;
+  width: 26px;
+  margin-top: 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  cursor: pointer;
+  text-align: left;
+}
+span.tree-toggle {
+  cursor: default;
+}
+.tree table {
+  margin: 6px 0;
+}
+.tree-table th,
+.tree-table td,
+.tree strong {
   white-space: nowrap;
+}
+.tree-note {
+  margin: -2px 0 6px;
+}
+.tree-leaf {
+  padding-top: 2px;
+}
+/* A long message wraps in its cell. */
+.wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 650px) {
   body {
