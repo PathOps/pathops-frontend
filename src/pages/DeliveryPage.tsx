@@ -13,7 +13,7 @@ import { running, useResource, type Resource } from "../api/useResource";
 import { FailureText, FluxReady, FluxRevision, Sha12, TektonStepsTable, executorName, type LogPath } from "../components/execution";
 import { Page } from "../components/Page";
 import { Node, Row, Tree } from "../components/tree";
-import { BuildLink, Copy, DeploymentLink, Duration, EnvironmentLabel, Fact, Facts, Loaded, Status, Time, humanize, seconds } from "../components/ui";
+import { BuildLink, Copy, DeploymentLink, Duration, EnvironmentLabel, Fact, Facts, Loaded, Status, Time, humanize, seconds, stepTitle } from "../components/ui";
 import { resource } from "../live/topics";
 import { AppCrumbs, appPath } from "./BuildPage";
 import { stepPath } from "./DeploymentPage";
@@ -23,19 +23,27 @@ import { stepPath } from "./DeploymentPage";
 // (what the engine reported) as siblings; under a Tekton Execution its
 // PipelineRun, TaskRuns and Steps (logs live), under a Flux one its
 // GitRepository and Kustomization. Only the few facts that tell what
-// happened; every # links the page with all of them.
+// happened; a projection's # (Build, Deployment, GitOps update,
+// Reconciliation) links the page with all of them. A step's # is only its
+// position.
+//
+// Where it starts: a succeeded run with its steps closed (one line each); a
+// failed run with the branch of its failed step open, its succeeded steps
+// closed; a running run with its running branch open. Opening a step opens
+// its whole branch.
 
 const stepHead = ["#", "Step", "Status", "Started", "Duration"];
 
-// StepRow is a step's one-row table; # links its page (none: plain).
-function StepRow({ s, to }: { s: DeliveryStep; to?: string }) {
+// StepRow is a step's one-row table: its position (not a link: a step is
+// not its projection), its name, its verdict and times.
+function StepRow({ s }: { s: DeliveryStep }) {
   return (
     <Row
-      label={`Step ${humanize(s.type)}`}
+      label={`Step ${stepTitle(s.type)}`}
       head={stepHead}
       cells={[
-        to ? <Link to={to}>#{s.position}</Link> : `#${s.position}`,
-        humanize(s.type),
+        String(s.position),
+        stepTitle(s.type),
         <Status status={s.status} />,
         <Time at={s.startedAt} />,
         <Duration seconds={s.durationSeconds} />,
@@ -51,9 +59,8 @@ function ExecutionRow({ x }: { x: TektonExecution | FluxExecution }) {
   return (
     <Row
       label={`Execution ${executorName(x.executor)}`}
-      head={["Execution", "Executor", "Status", "Duration", ...(failed ? ["Reason"] : [])]}
+      head={["Executor", "Status", "Duration", ...(failed ? ["Reason"] : [])]}
       cells={[
-        "",
         executorName(x.executor),
         <Status status={x.status} />,
         <Duration seconds={seconds(x.startedAt, x.completedAt)} />,
@@ -158,9 +165,22 @@ function ExecutionNode({ id, x, logPath }: { id: string; x: TektonExecution | Fl
   );
 }
 
+// rootOpen is where a top-level step of a run in runStatus starts: open
+// when it failed or runs (a succeeded run: all closed).
+function rootOpen(runStatus: string, s: DeliveryStep): boolean {
+  if (runStatus === "SUCCEEDED") return false;
+  return s.status === "FAILED" || s.status === "RUNNING";
+}
+
+// childOpen is where a step under a top-level one starts: open unless it
+// succeeded (the failed or running one is the one to see).
+function childOpen(s: DeliveryStep): boolean {
+  return s.status !== "SUCCEEDED";
+}
+
 // BuildBranch is BUILD_APPLICATION: its Build and its Execution. Live with
 // its Build (BUILD_CHANGED); read again every few seconds while it runs.
-function BuildBranch({ appId, s }: { appId: string; s: DeliveryStep }) {
+function BuildBranch({ appId, runStatus, s }: { appId: string; runStatus: string; s: DeliveryStep }) {
   const buildId = s.build?.id;
   const b: Resource<BuildDetail> = useResource(buildId ? appPath(appId, `/builds/${encodeURIComponent(buildId)}`) : null, {
     live: (e) => !!buildId && resource("BUILD_CHANGED", buildId)(e),
@@ -169,12 +189,7 @@ function BuildBranch({ appId, s }: { appId: string; s: DeliveryStep }) {
   const id = `s${s.position}`;
   const d = b.data;
   return (
-    <Node
-      id={id}
-      label={humanize(s.type)}
-      table={<StepRow s={s} to={buildId ? `/applications/${appId}/builds/${buildId}` : undefined} />}
-      note={s.failure && <FailureText failure={s.failure} />}
-    >
+    <Node id={id} label={stepTitle(s.type)} table={<StepRow s={s} />} note={s.failure && <FailureText failure={s.failure} />} defaultOpen={rootOpen(runStatus, s)}>
       {s.build && (
         <Node
           id={`${id}/build`}
@@ -219,16 +234,16 @@ function ChildBranch({ appId, runId, parent, deploymentId, s }: { appId: string;
   const d = r.data;
   const to = started ? stepPath(appId, deploymentId!, s.type) : undefined;
   return (
-    <Node id={id} label={humanize(s.type)} table={<StepRow s={s} to={to} />} note={s.failure && <FailureText failure={s.failure} />}>
+    <Node id={id} label={stepTitle(s.type)} table={<StepRow s={s} />} note={s.failure && <FailureText failure={s.failure} />} defaultOpen={childOpen(s)}>
       {d?.gitopsUpdate && (
         <Node
           id={`${id}/update`}
-          label="GitOps update"
+          label={`GitOps update #${d.gitopsUpdate.number}`}
           table={
             <Row
               label="GitOps update"
               head={["GitOps update", "Repository", "Result"]}
-              cells={[<Link to={to!}>Update</Link>, d.gitopsUpdate.repository, <Sha12 sha={d.gitopsUpdate.resultingCommit} />]}
+              cells={[<Link to={to!}>#{d.gitopsUpdate.number}</Link>, d.gitopsUpdate.repository, <Sha12 sha={d.gitopsUpdate.resultingCommit} />]}
             />
           }
         />
@@ -236,12 +251,12 @@ function ChildBranch({ appId, runId, parent, deploymentId, s }: { appId: string;
       {d?.reconciliation && (
         <Node
           id={`${id}/reconciliation`}
-          label="Reconciliation"
+          label={`Reconciliation #${d.reconciliation.number}`}
           table={
             <Row
               label="Reconciliation"
               head={["Reconciliation", "Target revision"]}
-              cells={[<Link to={to!}>Reconcile</Link>, <Sha12 sha={d.reconciliation.targetRevision} />]}
+              cells={[<Link to={to!}>#{d.reconciliation.number}</Link>, <Sha12 sha={d.reconciliation.targetRevision} />]}
             />
           }
         />
@@ -259,19 +274,14 @@ function ChildBranch({ appId, runId, parent, deploymentId, s }: { appId: string;
 
 // DeployBranch is DEPLOY_<environment>: its Deployment and its own steps
 // (no Execution: a composite step). Live with the run.
-function DeployBranch({ appId, runId, s }: { appId: string; runId: string; s: DeliveryStep }) {
+function DeployBranch({ appId, runId, runStatus, s }: { appId: string; runId: string; runStatus: string; s: DeliveryStep }) {
   const depId = s.deployment?.id;
   const dep: Resource<DeploymentDetail> = useResource(depId ? appPath(appId, `/deployments/${encodeURIComponent(depId)}`) : null, {
     live: (e) => resource("DELIVERY_CHANGED", runId)(e),
   });
   const id = `s${s.position}`;
   return (
-    <Node
-      id={id}
-      label={humanize(s.type)}
-      table={<StepRow s={s} to={depId ? `/applications/${appId}/deployments/${depId}` : undefined} />}
-      note={s.failure && <FailureText failure={s.failure} />}
-    >
+    <Node id={id} label={stepTitle(s.type)} table={<StepRow s={s} />} note={s.failure && <FailureText failure={s.failure} />} defaultOpen={rootOpen(runStatus, s)}>
       {s.deployment && (
         <Node
           id={`${id}/deployment`}
@@ -307,11 +317,11 @@ export function DeliveryTree({ appId, run }: { appId: string; run: DeliveryDetai
         .sort((a, b) => a.position - b.position)
         .map((s) =>
           s.build || s.type === "BUILD_APPLICATION" ? (
-            <BuildBranch key={s.type} appId={appId} s={s} />
+            <BuildBranch key={s.type} appId={appId} runStatus={run.status} s={s} />
           ) : s.deployment || s.steps ? (
-            <DeployBranch key={s.type} appId={appId} runId={run.id} s={s} />
+            <DeployBranch key={s.type} appId={appId} runId={run.id} runStatus={run.status} s={s} />
           ) : (
-            <Node key={s.type} id={`s${s.position}`} label={humanize(s.type)} table={<StepRow s={s} />} note={s.failure && <FailureText failure={s.failure} />} />
+            <Node key={s.type} id={`s${s.position}`} label={stepTitle(s.type)} table={<StepRow s={s} />} note={s.failure && <FailureText failure={s.failure} />} />
           ),
         )}
     </Tree>

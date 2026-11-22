@@ -342,7 +342,7 @@ export const deploymentDetail: DeploymentDetail = {
       completedAt: "2026-11-20T10:00:30Z",
       durationSeconds: 30,
       failure: null,
-      gitopsUpdate: { repository: "alice/hello-gitops-preflight", baseCommit, resultingCommit: gitopsG },
+      gitopsUpdate: { number: 4, repository: "alice/hello-gitops-preflight", baseCommit, resultingCommit: gitopsG },
       execution: { executor: "TEKTON", status: "SUCCEEDED", pipelineRun: { namespace: "hello-preflight-update", name: "update-preflight-dep-1" } },
     },
     {
@@ -353,7 +353,7 @@ export const deploymentDetail: DeploymentDetail = {
       completedAt: "2026-11-20T10:02:00Z",
       durationSeconds: 90,
       failure: null,
-      reconciliation: { targetRevision: gitopsG },
+      reconciliation: { number: 4, targetRevision: gitopsG },
       execution: { executor: "FLUX", status: "SUCCEEDED" },
     },
   ],
@@ -412,3 +412,48 @@ export const reconcileStep: DeploymentStepDetail = {
     },
   },
 };
+
+// deliveryDeployFailed is run #1 whose Reconcile failed: Build Application
+// and Update GitOps succeeded, Deploy Preflight and the run FAILED.
+export const deliveryDeployFailed: DeliveryDetail = (() => {
+  const failure = { reason: "FLUX_RECONCILIATION_FAILED", message: "Ready=False" };
+  const [build, deploy] = deliveryOk.steps;
+  return {
+    ...deliveryOk,
+    status: "FAILED",
+    failure,
+    steps: [
+      build,
+      {
+        ...deploy,
+        status: "FAILED",
+        failure,
+        deployment: { ...deploy.deployment!, status: "FAILED" },
+        steps: [deploy.steps![0], { ...deploy.steps![1], status: "FAILED", failure, execution: { executor: "FLUX", status: "FAILED" } }],
+      },
+    ],
+  };
+})();
+
+// deliveryRunning is run #1 while its Update GitOps runs.
+export const deliveryRunning: DeliveryDetail = (() => {
+  const [build, deploy] = deliveryOk.steps;
+  return {
+    ...deliveryOk,
+    status: "RUNNING",
+    completedAt: null,
+    steps: [
+      build,
+      {
+        ...deploy,
+        status: "RUNNING",
+        completedAt: null,
+        deployment: { ...deploy.deployment!, status: "IN_PROGRESS" },
+        steps: [
+          { ...deploy.steps![0], status: "RUNNING", completedAt: null },
+          { ...deploy.steps![1], status: "PENDING", startedAt: null, completedAt: null, execution: null },
+        ],
+      },
+    ],
+  };
+})();

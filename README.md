@@ -106,20 +106,26 @@ of the list shows its control disabled, a list of one page none.
   history. An environment is plain words: color is for statuses. Images copy
   each image's pinned reference (`repository@digest`) beside its tag.
 - **Delivery run** (Decision 0066): its facts (commit, source, trigger and
-  delivery id, times, error), then its steps as a tree, all open at first:
-  Build application with its Build and its Execution (Tekton: PipelineRun,
-  TaskRuns, Steps with live logs) as siblings; Deploy preflight with its
-  Deployment and its steps Update GitOps (GitOps update and Execution) and
-  Reconcile (Reconciliation and Execution: GitRepository, Kustomization).
-  Each node is a one-row table hung from its parent by a line; a node with
-  children has `[-]`/`[+]`; what a person closes stays closed while live
-  updates re-read the tree (not stored: a reload opens everything). The tree
-  shows only what tells what happened; every `#` links the page with all of
-  it (Build, Deployment, Update GitOps, Reconcile).
+  delivery id, times, error), then its steps as a tree of one-row tables hung
+  by lines: Build Application with its Build and its Execution (Tekton:
+  PipelineRun, TaskRuns, Steps with live logs) as siblings; Deploy Preflight
+  with its Deployment and its steps Update GitOps (GitOps update #N and
+  Execution) and Reconcile (Reconciliation #N and Execution: GitRepository,
+  Kustomization). Step names are in Title Case; a step's `#` is only its
+  position; a projection's `#` (Build, Deployment, GitOps update,
+  Reconciliation) links its page. Where it starts: a succeeded run with its
+  steps closed (`[+]`, one line each); a failed run with its failed step's
+  branch open and its succeeded steps closed; a running run with its running
+  branch open. Opening a step opens its whole branch; below it each node
+  opens and closes on its own; closing the step hides the branch, opening it
+  again opens all of it. Live updates keep what a person opened or closed
+  (nothing stored: a reload starts again). An Execution's row is `Executor |
+  Status | Duration` (and its reason when it failed).
 - **Deployment**: `Deployment #N`: environment, status (and its error),
   commit, image (its digest, a copy of the reference and the Build that
   produced it), Tests (`—`), delivery, start, duration and GitOps commit (G);
-  then its steps (`# | Step | Status | Started | Duration`, `#` links each).
+  then its steps (`# | Step | Status | Started | Duration | Result`: `#` the
+  position, Result the GitOps update #N or Reconciliation #N, linked).
 - **Build**, **Update GitOps** and **Reconcile** pages: the step (or Build),
   then the projection (Build; GitOps update: repository, base commit,
   resulting commit; Reconciliation: target revision), then the Execution's

@@ -73,6 +73,21 @@ export function humanize(s: string): string {
 
 // title turns a camelCase name (a Tekton result) into words: "imageDigest"
 // is "Image Digest".
+// stepTitle is a step type's display name in Title Case (the enum stays
+// the API's): BUILD_APPLICATION is Build Application, UPDATE_GITOPS Update
+// GitOps; a type it does not know yet, each word capitalized.
+export function stepTitle(type: string): string {
+  const known: Record<string, string> = {
+    BUILD_APPLICATION: "Build Application",
+    DEPLOY_PREFLIGHT: "Deploy Preflight",
+    DEPLOY_PRODUCTION: "Deploy Production",
+    UPDATE_GITOPS: "Update GitOps",
+    RECONCILE: "Reconcile",
+    VALIDATE: "Validate",
+  };
+  return known[type] ?? type.toLowerCase().split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
 export function title(name: string): string {
   const words = name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);

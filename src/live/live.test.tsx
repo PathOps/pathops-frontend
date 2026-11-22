@@ -339,24 +339,27 @@ describe("Live updates", () => {
     expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
   });
 
-  it("a live update of a Delivery re-reads its tree and keeps what the person collapsed", async () => {
+  it("a live update of a Delivery re-reads its tree and keeps what the person opened and collapsed", async () => {
     const source = fakeSource();
     const api = fakeApi(table());
     renderLive(`/applications/${f.appId}/deliveries/run-ok`, api, source);
     const tree = await screen.findByRole("tree", { name: "Delivery tree" });
-    await waitFor(() => expect(within(tree).getAllByRole("treeitem", { name: /^PipelineRun / })).toHaveLength(2));
     const c = await connected(source);
-    await userEvent.click(within(tree).getAllByRole("button", { name: "Collapse Execution Tekton" })[0]);
+    // A succeeded run starts closed; open Deploy Preflight, close its Reconcile.
+    await userEvent.click(within(tree).getByRole("button", { name: "Expand Deploy Preflight" }));
+    await waitFor(() => expect(within(tree).getAllByRole("treeitem", { name: "Kustomization" })).toHaveLength(1));
     await userEvent.click(within(tree).getByRole("button", { name: "Collapse Reconcile" }));
     const paths = [`${app}/deliveries/run-ok`, `${app}/deployments/dep-1/steps/RECONCILE`];
     const before = paths.map((p) => count(api, p));
     act(() => c.send(ev("DELIVERY_CHANGED", f.appId, "run-ok")));
     await waitFor(() => expect(count(api, paths[0])).toBe(before[0] + 1));
     await waitFor(() => expect(count(api, paths[1])).toBe(before[1] + 1));
-    // Still collapsed: one PipelineRun (Update GitOps'), no Kustomization.
-    expect(within(tree).getAllByRole("treeitem", { name: /^PipelineRun / })).toHaveLength(1);
-    expect(within(tree).queryByRole("treeitem", { name: "Kustomization" })).toBeNull();
+    // As the person left it: Deploy Preflight open, Reconcile closed, Build Application closed.
+    expect(within(tree).getByRole("button", { name: "Collapse Deploy Preflight" })).toHaveTextContent("[-]");
     expect(within(tree).getByRole("button", { name: "Expand Reconcile" })).toHaveTextContent("[+]");
+    expect(within(tree).getByRole("button", { name: "Expand Build Application" })).toHaveTextContent("[+]");
+    expect(within(tree).queryByRole("treeitem", { name: "Kustomization" })).toBeNull();
+    expect(within(tree).getAllByRole("treeitem", { name: /^PipelineRun / })).toHaveLength(1);
   });
 
   it("the Inbox badge follows INBOX_CHANGED on any page; the Inbox list too, without a Refresh", async () => {

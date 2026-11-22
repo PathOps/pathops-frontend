@@ -87,6 +87,8 @@ export interface ExecutionSummary {
 // it updated (base; also where Tekton resolved the update from) and the
 // commit it produced, once accepted (G).
 export interface GitOpsUpdate {
+  // number is its #N within the Application (its own sequence, like a Build's).
+  number: number;
   repository: string;
   baseCommit: string;
   resultingCommit?: string;
@@ -103,7 +105,8 @@ export interface DeploymentStep {
   durationSeconds: number | null;
   failure: Failure | null;
   gitopsUpdate?: GitOpsUpdate;
-  reconciliation?: { targetRevision: string };
+  // number is its #N within the Application (its own sequence).
+  reconciliation?: { number: number; targetRevision: string };
   execution: ExecutionSummary | null;
 }
 

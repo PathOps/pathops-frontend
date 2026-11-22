@@ -16,7 +16,7 @@ import {
   Short,
   Status,
   Time,
-  humanize,
+  stepTitle,
 } from "../components/ui";
 import { deployment } from "../live/topics";
 import { AppCrumbs, appPath } from "./BuildPage";
@@ -27,7 +27,8 @@ export function stepPath(appId: string, deploymentId: string, type: string): str
 }
 
 // Steps are a Deployment's own steps in order: Update GitOps, Reconcile
-// (Validate later); # links each step's page.
+// (Validate later). # is only the step's position; what each step produced
+// (GitOps update #N, Reconciliation #N) links its page.
 function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
   return (
     <div className="scroll">
@@ -39,6 +40,7 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
             <th>Status</th>
             <th>Started</th>
             <th>Duration</th>
+            <th>Result</th>
           </tr>
         </thead>
         <tbody>
@@ -46,8 +48,8 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
             .sort((a, b) => a.position - b.position)
             .map((s: DeploymentStep) => (
               <tr key={s.type}>
-                <td>{s.startedAt ? <Link to={stepPath(appId, d.id, s.type)}>#{s.position}</Link> : `#${s.position}`}</td>
-                <td>{humanize(s.type)}</td>
+                <td>{s.position}</td>
+                <td>{stepTitle(s.type)}</td>
                 <td>
                   <Status status={s.status} />
                   {s.failure && (
@@ -62,6 +64,15 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
                 </td>
                 <td>
                   <Duration seconds={s.durationSeconds} />
+                </td>
+                <td>
+                  {s.gitopsUpdate ? (
+                    <Link to={stepPath(appId, d.id, s.type)}>GitOps update #{s.gitopsUpdate.number}</Link>
+                  ) : s.reconciliation ? (
+                    <Link to={stepPath(appId, d.id, s.type)}>Reconciliation #{s.reconciliation.number}</Link>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
                 </td>
               </tr>
             ))}

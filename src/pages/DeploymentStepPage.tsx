@@ -11,7 +11,7 @@ import {
   TaskRunsDetail,
 } from "../components/execution";
 import { Page } from "../components/Page";
-import { Duration, Fact, Facts, Loaded, Status, Time, humanize } from "../components/ui";
+import { Duration, Fact, Facts, Loaded, Status, Time, stepTitle } from "../components/ui";
 import { appPath } from "./BuildPage";
 
 // DeploymentStepPage is one step of a Deployment (Decision 0066), all of
@@ -52,7 +52,7 @@ export function DeploymentStepPage() {
         {(d) => (
           <>
             <h1>
-              {humanize(d.type)} — Deployment #{d.deploymentNumber}
+              {stepTitle(d.type)} — Deployment #{d.deploymentNumber}
             </h1>
             <Facts label="Step">
               <Fact label="Status">
@@ -75,7 +75,7 @@ export function DeploymentStepPage() {
             </Facts>
             {d.gitopsUpdate && (
               <>
-                <h2>GitOps update</h2>
+                <h2>GitOps update #{d.gitopsUpdate.number}</h2>
                 <Facts label="GitOps update">
                   <Fact label="Repository">{d.gitopsUpdate.repository}</Fact>
                   <Fact label="Base commit">
@@ -89,7 +89,7 @@ export function DeploymentStepPage() {
             )}
             {d.reconciliation && (
               <>
-                <h2>Reconciliation</h2>
+                <h2>Reconciliation #{d.reconciliation.number}</h2>
                 <Facts label="Reconciliation">
                   <Fact label="Target revision">
                     <FullSha sha={d.reconciliation.targetRevision} />
