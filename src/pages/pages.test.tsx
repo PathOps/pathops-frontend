@@ -1084,7 +1084,8 @@ describe("Deployment page", () => {
     const [gr, ks] = within(objects).getAllByRole("row").slice(1);
     expect(gr).toHaveTextContent("GitRepository");
     expect(gr).toHaveTextContent("hello-gitops-preflight");
-    expect(within(gr).getByTitle(f.gitopsG)).toBeInTheDocument();
+    expect(within(gr).getByTitle(`main@sha1:${f.gitopsG}`)).toHaveTextContent(f.gitopsG.slice(0, 12));
+    expect(within(within(flux).getByRole("row", { name: /^Status/ })).getByText("Succeeded")).toHaveClass("status-ok");
     expect(ks).toHaveTextContent("Kustomization");
     expect(ks).toHaveTextContent("ReconciliationSucceeded");
     expect(ks).toHaveTextContent("Applied revision");

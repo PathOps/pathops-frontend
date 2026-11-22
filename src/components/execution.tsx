@@ -218,16 +218,12 @@ export function LogViewer({ path, taskRun, step }: { path: string; taskRun: stri
   );
 }
 
-// Revision is a Flux revision (main@sha1:<sha>) shortened, the whole on
-// hover and copy.
+// Revision is a Flux revision (main@sha1:<sha>) as its commit's first 12
+// characters, the whole revision on hover.
 function Revision({ rev }: { rev?: string }) {
   if (!rev) return <span className="muted">—</span>;
   const sha = rev.slice(rev.lastIndexOf(":") + 1);
-  return (
-    <Copy text={rev}>
-      <Short text={sha} />
-    </Copy>
-  );
+  return <code title={rev}>{sha.slice(0, 12)}</code>;
 }
 
 function FluxRow({ kind, o }: { kind: string; o: FluxObject | null }) {
@@ -290,7 +286,7 @@ export function FluxExecutionView({ x }: { x: FluxExecution }) {
     <>
       <Facts label="Flux execution">
         <Fact label="Status">
-          <Status status={x.status} label={x.reason ? humanize(x.reason) : x.status} />
+          <Status status={x.status} label={x.reason ? humanize(x.reason) : undefined} />
         </Fact>
         {x.message && <Fact label="Message">{x.message}</Fact>}
         <Fact label="Namespace">
@@ -321,8 +317,8 @@ export function FluxExecutionView({ x }: { x: FluxExecution }) {
             <tr>
               <th>Object</th>
               <th>Name</th>
-              <th>Revision (attempted / applied)</th>
-              <th>Generation (observed / current)</th>
+              <th>Revision</th>
+              <th>Generation</th>
               <th>Ready</th>
               <th>Message</th>
               <th>Observed</th>
