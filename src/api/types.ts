@@ -32,10 +32,17 @@ export interface EnvironmentRef {
   deployment?: DeploymentRef | null;
 }
 
-// DeploymentRef is a Deployment (Decision 0064): one image applied to one
-// environment, numbered within the Application. Three distinct revisions:
-// the source commit of the image, the GitOps commit whose update Task ran and
-// the GitOps commit it produced (what Flux applied).
+// Failure is why a run, step or Deployment FAILED: a reason code and the
+// sanitized message.
+export interface Failure {
+  reason: string;
+  message?: string;
+}
+
+// DeploymentRef is a Deployment (Decisions 0064, 0066): one image applied to
+// one environment, numbered within the Application. Its status, times and
+// failure are its step's; gitopsCommit is the GitOps commit its update
+// produced (G); tests is its Validation's (null: none yet).
 export interface DeploymentRef {
   id: string;
   number: number;
@@ -47,11 +54,9 @@ export interface DeploymentRef {
   head12: string;
   image: Image | null;
   imageReference: string;
-  gitopsRepository: string;
-  gitopsTaskRevision: string;
   gitopsCommit?: string;
-  failureReason?: string;
-  failureMessage?: string;
+  tests: { passed: number; total: number } | null;
+  failure: Failure | null;
   startedAt: Iso;
   completedAt: Iso | null;
   durationSeconds: number | null;
@@ -68,10 +73,52 @@ export interface EnvironmentSummary {
   url?: string;
 }
 
-// DeploymentDetail is one Deployment's page: the Deployment and the Build
-// that produced its image.
+// ExecutionSummary is what an engine reported, in short: its own status,
+// separate from the step's (PathOps' verdict).
+export interface ExecutionSummary {
+  executor: string;
+  status: string;
+  reason?: string;
+  message?: string;
+  pipelineRun?: { namespace: string; name: string };
+}
+
+// GitOpsUpdate is an Update GitOps step's facts: the repository, the commit
+// it updated (base; also where Tekton resolved the update from) and the
+// commit it produced, once accepted (G).
+export interface GitOpsUpdate {
+  repository: string;
+  baseCommit: string;
+  resultingCommit?: string;
+}
+
+// DeploymentStep is one step of a Deployment (Update GitOps, Reconcile;
+// Validate later): PathOps' verdict, its facts and its Execution's summary.
+export interface DeploymentStep {
+  position: number;
+  type: string;
+  status: string;
+  startedAt: Iso | null;
+  completedAt: Iso | null;
+  durationSeconds: number | null;
+  failure: Failure | null;
+  gitopsUpdate?: GitOpsUpdate;
+  reconciliation?: { targetRevision: string };
+  execution: ExecutionSummary | null;
+}
+
+// DeploymentDetail is one Deployment's page: the Deployment, the Build that
+// produced its image and its steps.
 export interface DeploymentDetail extends DeploymentRef {
   build: { id: string; number: number; status: string } | null;
+  steps: DeploymentStep[];
+}
+
+// DeploymentStepDetail is one step of a Deployment with its full Execution.
+export interface DeploymentStepDetail extends Omit<DeploymentStep, "execution"> {
+  deploymentId: string;
+  deploymentNumber: number;
+  execution: TektonExecution | FluxExecution | null;
 }
 
 export interface ApplicationSummary {
@@ -185,6 +232,7 @@ export interface BuildRef {
 export interface DeliverySummary {
   id: string;
   number: number;
+  trigger: string;
   sourceRevision: string;
   head12: string;
   status: string;
@@ -192,31 +240,31 @@ export interface DeliverySummary {
   startedAt: Iso | null;
   completedAt: Iso | null;
   durationSeconds: number | null;
-  sanitizedError?: string;
+  failure: Failure | null;
   build: BuildRef | null;
 }
 
+// DeliveryStep is one step of a DeliveryRun (Decision 0066): a top-level
+// step carries its Build or Deployment; a composite one its children.
 export interface DeliveryStep {
-  id: string;
   position: number;
   type: string;
-  executor: string;
   status: string;
-  externalRef?: string;
-  sanitizedError?: string;
-  createdAt: Iso;
   startedAt: Iso | null;
   completedAt: Iso | null;
   durationSeconds: number | null;
-  build: BuildRef | null;
-  deployment?: DeploymentRef | null;
+  failure: Failure | null;
+  build?: BuildRef;
+  deployment?: { id: string; number: number; environment: string; status: string };
+  execution: ExecutionSummary | null;
+  steps?: DeliveryStep[];
 }
 
 export interface DeliveryDetail extends DeliverySummary {
   applicationId: string;
+  triggerId: string;
   sourceRepository: string;
   sourceRef: string;
-  webhookDeliveryId: string;
   steps: DeliveryStep[];
 }
 
@@ -226,18 +274,13 @@ export interface BuildSummary {
   applicationId: string;
   deliveryRunId: string;
   deliveryNumber: number;
-  deliveryStepId: string;
   sourceRevision: string;
   head12: string;
   status: string;
-  createdAt: Iso;
   startedAt: Iso | null;
   completedAt: Iso | null;
   durationSeconds: number | null;
-  pipelineRun: { namespace: string; name: string };
-  triggerEventId?: string;
-  triggeredAt: Iso | null;
-  sanitizedError?: string;
+  failure: Failure | null;
   image: Image | null;
 }
 
@@ -246,24 +289,15 @@ export interface Result {
   value: string;
 }
 
-export interface PipelineRunView {
-  status: string;
-  reason?: string;
-  message?: string;
-  startTime: Iso | null;
-  completionTime: Iso | null;
-  results: Result[];
-  taskRuns: { name: string; pipelineTask: string }[];
+// RefSource is where Tekton reported resolving a definition from
+// (status.provenance.refSource).
+export interface RefSource {
+  uri?: string;
+  digest?: Record<string, string>;
+  entryPoint?: string;
 }
 
-// observation: "observed", "not_found" (pruned or not created yet) or
-// "unavailable" (the Tenant CP could not read Tekton).
-export interface BuildDetail extends BuildSummary {
-  observation: string;
-  pipelineRunStatus: PipelineRunView | null;
-}
-
-export interface StepView {
+export interface StepRecord {
   name: string;
   state: string;
   reason?: string;
@@ -272,28 +306,79 @@ export interface StepView {
   finishedAt: Iso | null;
 }
 
-export interface TaskRunView {
+// TaskRunRecord is one TaskRun as PathOps recorded it: observedAt null when
+// it was named by its PipelineRun but never read.
+export interface TaskRunRecord {
   name: string;
   pipelineTask: string;
   task?: string;
-  observation: string;
   status?: string;
   reason?: string;
   message?: string;
-  startTime: Iso | null;
-  completionTime: Iso | null;
-  steps: StepView[];
+  startedAt: Iso | null;
+  completedAt: Iso | null;
+  observedAt: Iso | null;
   results: Result[];
+  refSource: RefSource | null;
+  steps: StepRecord[];
 }
 
-export interface Tasks {
-  buildId: string;
-  observation: string;
-  taskRuns: TaskRunView[];
+// TektonExecution is a Tekton Execution as PathOps recorded it: it stays
+// after Tekton prunes its objects. Logs are read live.
+export interface TektonExecution {
+  executor: "TEKTON";
+  status: string;
+  reason?: string;
+  message?: string;
+  createdAt: Iso;
+  startedAt: Iso | null;
+  completedAt: Iso | null;
+  observedAt: Iso | null;
+  pipelineRun: { namespace: string; name: string; uid?: string };
+  triggerEventId?: string;
+  triggeredAt: Iso | null;
+  results: Result[];
+  refSource: RefSource | null;
+  taskRuns: TaskRunRecord[];
+}
+
+// FluxObject is a Flux object's last observed state (found false: it did
+// not exist).
+export interface FluxObject {
+  name: string;
+  found: boolean;
+  generation: number | null;
+  observedGeneration: number | null;
+  artifactRevision?: string;
+  lastAttemptedRevision?: string;
+  lastAppliedRevision?: string;
+  ready: { status: string; reason?: string; message?: string } | null;
+  observedAt: Iso;
+}
+
+// FluxExecution is a Flux Execution as PathOps recorded it: the objects, the
+// source revision Flux had when it started (baseline) and their last state.
+export interface FluxExecution {
+  executor: "FLUX";
+  status: string;
+  reason?: string;
+  message?: string;
+  startedAt: Iso | null;
+  completedAt: Iso | null;
+  observedAt: Iso | null;
+  namespace: string;
+  baselineRevision?: string;
+  gitRepository: FluxObject | null;
+  kustomization: FluxObject | null;
+}
+
+// BuildDetail is a Build with its Execution and where its evidence is.
+export interface BuildDetail extends BuildSummary {
+  evidence?: string;
+  execution: TektonExecution | null;
 }
 
 export interface Log {
-  buildId: string;
   taskRun: string;
   step: string;
   content: string;

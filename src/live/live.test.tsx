@@ -135,8 +135,7 @@ function table() {
     [`${app}/builds`]: { builds: [f.buildBad, f.buildOk], previousCursor: null, nextCursor: null },
     [`${app}/deliveries`]: { ...f.deliveries, previousCursor: null, nextCursor: null },
     [`${app}/deliveries/run-ok`]: f.deliveryOk,
-    "/api/v1/builds/build-ok": f.buildOk,
-    "/api/v1/builds/build-ok/tasks": f.tasksOk,
+    [`${app}/builds/build-ok`]: f.buildOk,
     "/api/v1/inbox?unread=true&limit=1": { messages: [], unread: 0, previousCursor: null, nextCursor: null },
     "/api/v1/inbox": { messages: [], unread: 0, previousCursor: null, nextCursor: null },
     "/api/v1/applications": f.applications,
@@ -313,11 +312,11 @@ describe("Live updates", () => {
     renderLive(`/applications/${f.appId}/builds/build-ok`, api, source);
     await screen.findByRole("heading", { name: "Build #1" });
     const c = await connected(source);
-    const before = count(api, "/api/v1/builds/build-ok");
+    const before = count(api, `${app}/builds/build-ok`);
     act(() => c.send(ev("BUILD_CHANGED", f.appId, "build-bad")));
-    expect(count(api, "/api/v1/builds/build-ok")).toBe(before);
+    expect(count(api, `${app}/builds/build-ok`)).toBe(before);
     act(() => c.send(ev("BUILD_CHANGED", f.appId, "build-ok")));
-    await waitFor(() => expect(count(api, "/api/v1/builds/build-ok")).toBe(before + 1));
+    await waitFor(() => expect(count(api, `${app}/builds/build-ok`)).toBe(before + 1));
     expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
   });
 

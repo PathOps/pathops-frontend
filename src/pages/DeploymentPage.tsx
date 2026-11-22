@@ -1,6 +1,7 @@
-import { useParams } from "react-router-dom";
-import type { DeploymentDetail } from "../api/types";
-import { useResource, type Resource } from "../api/useResource";
+import { Link, useParams } from "react-router-dom";
+import type { DeploymentDetail, DeploymentStep } from "../api/types";
+import { running, useResource, type Resource } from "../api/useResource";
+import { FailureText } from "../components/execution";
 import { Page } from "../components/Page";
 import {
   BuildLink,
@@ -18,17 +19,77 @@ import {
   humanize,
 } from "../components/ui";
 import { deployment } from "../live/topics";
-import { AppCrumbs } from "./BuildPage";
+import { AppCrumbs, appPath } from "./BuildPage";
 
-// DeploymentPage is one Deployment: what it applied where, and how it went.
-// Its delivery's page has the steps; this one may grow (events, evidence).
-// Live: a Deployment's change is its delivery run's (DELIVERY_CHANGED).
+// stepPath is the UI path of a Deployment's step.
+export function stepPath(appId: string, deploymentId: string, type: string): string {
+  return `/applications/${appId}/deployments/${deploymentId}/steps/${type}`;
+}
+
+// Steps are a Deployment's own steps in order: Update GitOps, Reconcile
+// (Validate later), each linking its details.
+function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
+  return (
+    <div className="scroll">
+      <table aria-label="Deployment steps">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Step</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Duration</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...d.steps]
+            .sort((a, b) => a.position - b.position)
+            .map((s: DeploymentStep) => (
+              <tr key={s.type}>
+                <td>{s.position}</td>
+                <td>{humanize(s.type)}</td>
+                <td>
+                  <Status status={s.status} />
+                  {s.failure && (
+                    <>
+                      {" — "}
+                      <FailureText failure={s.failure} />
+                    </>
+                  )}
+                </td>
+                <td>
+                  <Time at={s.startedAt} />
+                </td>
+                <td>
+                  <Duration seconds={s.durationSeconds} />
+                </td>
+                <td>
+                  {s.startedAt ? (
+                    <Link to={stepPath(appId, d.id, s.type)} aria-label={`${humanize(s.type)} details`}>
+                      Details
+                    </Link>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// DeploymentPage is one Deployment (by id or number): what it applied where,
+// how it went, and its steps. Live: a Deployment's change is its delivery
+// run's (DELIVERY_CHANGED).
 export function DeploymentPage() {
   const { appId = "", deploymentId = "" } = useParams();
-  const r: Resource<DeploymentDetail> = useResource(
-    `/api/v1/applications/${encodeURIComponent(appId)}/deployments/${encodeURIComponent(deploymentId)}`,
-    { live: (e) => deployment(appId, r.data?.deliveryRunId)(e) },
-  );
+  const r: Resource<DeploymentDetail> = useResource(appPath(appId, `/deployments/${encodeURIComponent(deploymentId)}`), {
+    live: (e) => deployment(appId, r.data?.deliveryRunId)(e),
+    pollWhile: (d) => running(d.status),
+  });
   return (
     <Page crumbs={<AppCrumbs appId={appId} section="deployments" title="Deployments" />}>
       <Loaded resource={r}>
@@ -42,12 +103,9 @@ export function DeploymentPage() {
               <Fact label="Status">
                 <Status status={d.status} />
               </Fact>
-              {d.failureMessage && (
+              {d.failure && (
                 <Fact label="Error">
-                  <span className="error">
-                    {d.failureReason ? `${humanize(d.failureReason)}: ` : ""}
-                    {d.failureMessage}
-                  </span>
+                  <FailureText failure={d.failure} />
                 </Fact>
               )}
               <Fact label="Commit">
@@ -62,6 +120,7 @@ export function DeploymentPage() {
                   </>
                 )}
               </Fact>
+              <Fact label="Tests">{d.tests ? `${d.tests.passed}/${d.tests.total}` : <span className="muted">—</span>}</Fact>
               <Fact label="Delivery">
                 <RunLink appId={appId} id={d.deliveryRunId} number={d.deliveryNumber} />
               </Fact>
@@ -81,6 +140,8 @@ export function DeploymentPage() {
                 )}
               </Fact>
             </Facts>
+            <h2>Steps</h2>
+            <Steps appId={appId} d={d} />
           </>
         )}
       </Loaded>

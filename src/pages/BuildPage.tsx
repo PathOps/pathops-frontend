@@ -1,29 +1,10 @@
-import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { BuildDetail, Log, Overview, Tasks, TaskRunView } from "../api/types";
-import { running, useResource } from "../api/useResource";
+import type { BuildDetail, Overview } from "../api/types";
+import { running, useResource, type Resource } from "../api/useResource";
+import { FailureText, TektonExecutionView } from "../components/execution";
 import { Page } from "../components/Page";
+import { Copy, Duration, Fact, Facts, Loaded, RunLink, Status, Time } from "../components/ui";
 import { resource } from "../live/topics";
-import {
-  Copy,
-  CopyButton,
-  Duration,
-  ErrorBox,
-  Fact,
-  Facts,
-  Loaded,
-  RunLink,
-  Status,
-  Time,
-  newestFirst,
-  seconds,
-  title,
-} from "../components/ui";
-
-const observationText: Record<string, string> = {
-  not_found: "Tekton no longer has this PipelineRun (pruned), or has not created it yet.",
-  unavailable: "Tekton could not be read right now.",
-};
 
 // AppCrumbs is "/ <application> / <section>" of a page under an Application.
 export function AppCrumbs({ appId, section, title }: { appId: string; section: string; title: string }) {
@@ -38,19 +19,21 @@ export function AppCrumbs({ appId, section, title }: { appId: string; section: s
   );
 }
 
-// useBuild is a Build and its PipelineRun: live (this build's invalidations
-// only); while it runs, Tekton's progress, which no invalidation reports, is
-// also read again every few seconds.
-export function useBuild(buildId: string) {
-  return useResource<BuildDetail>(`/api/v1/builds/${encodeURIComponent(buildId)}`, {
-    live: resource("BUILD_CHANGED", buildId),
-    pollWhile: (d) => running(d.status),
-  });
+// appPath is the API path of something of Application appId.
+export function appPath(appId: string, rest: string): string {
+  return `/api/v1/applications/${encodeURIComponent(appId)}${rest}`;
 }
 
+// BuildPage is one Build (by id or number) and its Tekton Execution as
+// PathOps recorded it: PipelineRun -> TaskRuns -> Steps, logs live. Live:
+// this build's invalidations; while it runs, also read again every few
+// seconds.
 export function BuildPage() {
   const { appId = "", buildId = "" } = useParams();
-  const b = useBuild(buildId);
+  const b: Resource<BuildDetail> = useResource(appPath(appId, `/builds/${encodeURIComponent(buildId)}`), {
+    live: (e) => resource("BUILD_CHANGED", b.data?.id ?? buildId)(e),
+    pollWhile: (d) => running(d.status),
+  });
   return (
     <Page crumbs={<AppCrumbs appId={appId} section="builds" title="Builds" />}>
       <Loaded resource={b}>
@@ -64,9 +47,9 @@ export function BuildPage() {
               <Fact label="Status">
                 <Status status={d.status} />
               </Fact>
-              {d.sanitizedError && (
+              {d.failure && (
                 <Fact label="Error">
-                  <span className="error">{d.sanitizedError}</span>
+                  <FailureText failure={d.failure} />
                 </Fact>
               )}
               <Fact label="Commit">
@@ -90,315 +73,21 @@ export function BuildPage() {
                   <Copy text={d.image.digest} />
                 </Fact>
               )}
-              <Fact label="Trigger event">{d.triggerEventId ?? <span className="muted">—</span>}</Fact>
             </Facts>
             <h2>PipelineRun</h2>
-            <PipelineRunFacts build={d} />
-            <section aria-label="TaskRuns">
-              <h2>TaskRuns</h2>
-              <TaskRunList buildId={d.id} buildRunning={running(d.status)} />
-            </section>
+            {d.execution ? (
+              <TektonExecutionView
+                x={d.execution}
+                logPath={(tr, step) =>
+                  appPath(appId, `/builds/${encodeURIComponent(d.id)}/tasks/${encodeURIComponent(tr)}/logs?step=${encodeURIComponent(step)}`)
+                }
+              />
+            ) : (
+              <p className="muted">Not dispatched.</p>
+            )}
           </>
         )}
       </Loaded>
     </Page>
-  );
-}
-
-// PipelineRunFacts is what Tekton reports of a build's PipelineRun, or why
-// it cannot be read.
-export function PipelineRunFacts({ build }: { build: BuildDetail }) {
-  const pr = build.pipelineRunStatus;
-  return (
-    <Facts label="PipelineRun">
-      <Fact label="Name">
-        <code>
-          {build.pipelineRun.namespace}/{build.pipelineRun.name}
-        </code>
-      </Fact>
-      {!pr ? (
-        <Fact label="Status">
-          <span className="muted">{observationText[build.observation] ?? build.observation}</span>
-        </Fact>
-      ) : (
-        <>
-          <Fact label="Status">
-            <Status status={pr.status} label={pr.reason || pr.status} />
-          </Fact>
-          {pr.message && <Fact label="Message">{pr.message}</Fact>}
-          <Fact label="Started">
-            <Time at={pr.startTime} />
-          </Fact>
-          <Fact label="Completed">
-            <Time at={pr.completionTime} />
-          </Fact>
-          {pr.results.map((r) => (
-            <Fact key={r.name} label={title(r.name)}>
-              <code>{r.value}</code>
-            </Fact>
-          ))}
-        </>
-      )}
-    </Facts>
-  );
-}
-
-function truncate(s: string, n: number): string {
-  return s.length > n ? `${s.slice(0, n)}…` : s;
-}
-
-// PipelineRunRow is a build's PipelineRun as one summary row, or why Tekton
-// cannot tell.
-export function PipelineRunRow({ build }: { build: BuildDetail }) {
-  const pr = build.pipelineRunStatus;
-  return (
-    <table aria-label="PipelineRun">
-      <thead>
-        <tr>
-          <th>PipelineRun</th>
-          <th>Status</th>
-          <th>Started</th>
-          <th>Duration</th>
-          <th>Message</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>
-            {/* Its full name is on the Build page (and on hover). */}
-            <code title={`${build.pipelineRun.namespace}/${build.pipelineRun.name}`}>{truncate(build.pipelineRun.name, 14)}</code>
-          </td>
-          {pr ? (
-            <>
-              <td>
-                <Status status={pr.status} label={pr.reason || pr.status} />
-              </td>
-              <td>
-                <Time at={pr.startTime} />
-              </td>
-              <td>
-                <Duration seconds={seconds(pr.startTime, pr.completionTime)} />
-              </td>
-              <td>{pr.message ?? "—"}</td>
-            </>
-          ) : (
-            <td colSpan={4} className="muted">
-              {observationText[build.observation] ?? build.observation}
-            </td>
-          )}
-        </tr>
-      </tbody>
-    </table>
-  );
-}
-
-// TaskRunList is a build's TaskRuns with their steps, latest first. One
-// step's log is open at a time, in the row under that step. As rows, each
-// TaskRun is one summary row with its steps a level in.
-export function TaskRunList({ buildId, buildRunning, rows = false }: { buildId: string; buildRunning: boolean; rows?: boolean }) {
-  const t = useResource<Tasks>(`/api/v1/builds/${encodeURIComponent(buildId)}/tasks`, {
-    live: resource("BUILD_CHANGED", buildId),
-    pollWhile: () => buildRunning,
-  });
-  const [open, setOpen] = useState<string | null>(null);
-  return (
-    <Loaded resource={t}>
-      {(d) =>
-        d.observation !== "observed" ? (
-          <p className="muted">{observationText[d.observation] ?? d.observation}</p>
-        ) : d.taskRuns.length === 0 ? (
-          <p className="muted">No TaskRun yet.</p>
-        ) : (
-          <>
-            {newestFirst(d.taskRuns).map((tr) => (
-              <TaskRun key={tr.name} buildId={buildId} tr={tr} rows={rows} open={open} onLog={(key) => setOpen(open === key ? null : key)} />
-            ))}
-          </>
-        )
-      }
-    </Loaded>
-  );
-}
-
-function TaskRunRow({ tr }: { tr: TaskRunView }) {
-  return (
-    <table aria-label={`TaskRun ${tr.pipelineTask} summary`}>
-      <thead>
-        <tr>
-          <th>TaskRun</th>
-          <th>Status</th>
-          <th>Started</th>
-          <th>Duration</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>
-            <code title={tr.name}>{tr.pipelineTask}</code>
-          </td>
-          <td>
-            <Status status={tr.status} label={tr.reason || tr.status || tr.observation} />
-          </td>
-          <td>
-            <Time at={tr.startTime} />
-          </td>
-          <td>
-            <Duration seconds={seconds(tr.startTime, tr.completionTime)} />
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  );
-}
-
-function TaskRun({
-  buildId,
-  tr,
-  rows,
-  open,
-  onLog,
-}: {
-  buildId: string;
-  tr: TaskRunView;
-  rows: boolean;
-  open: string | null;
-  onLog: (key: string) => void;
-}) {
-  if (rows)
-    return (
-      <div aria-label={`TaskRun ${tr.pipelineTask}`} role="group">
-        <TaskRunRow tr={tr} />
-        <div className="level">
-          <StepTable buildId={buildId} tr={tr} open={open} onLog={onLog} />
-        </div>
-      </div>
-    );
-  return (
-    <div aria-label={`TaskRun ${tr.pipelineTask}`} role="group">
-      <h3>
-        {tr.pipelineTask} — <Status status={tr.status} label={tr.reason || tr.status || tr.observation} />
-      </h3>
-      <Facts label={`TaskRun ${tr.pipelineTask} facts`}>
-        <Fact label="TaskRun">
-          <code>{tr.name}</code>
-        </Fact>
-        {tr.task && <Fact label="Task">{tr.task}</Fact>}
-        <Fact label="Started">
-          <Time at={tr.startTime} />
-        </Fact>
-        <Fact label="Duration">
-          <Duration seconds={seconds(tr.startTime, tr.completionTime)} />
-        </Fact>
-        {tr.message && <Fact label="Message">{tr.message}</Fact>}
-      </Facts>
-      <StepTable buildId={buildId} tr={tr} open={open} onLog={onLog} />
-    </div>
-  );
-}
-
-function StepTable({ buildId, tr, open, onLog }: { buildId: string; tr: TaskRunView; open: string | null; onLog: (key: string) => void }) {
-  return (
-    <div className="scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Step</th>
-              <th>State</th>
-              <th>Exit code</th>
-              <th>Duration</th>
-              <th>Log</th>
-            </tr>
-          </thead>
-          <tbody>
-            {newestFirst(tr.steps.map((s, i) => ({ ...s, order: i + 1 }))).map((s) => {
-              const key = `${tr.name}/${s.name}`;
-              return (
-                <Fragment key={s.name}>
-                  <tr>
-                    <td>{s.order}</td>
-                    <td>{s.name}</td>
-                    <td>
-                      <Status status={s.exitCode === null ? s.state : s.exitCode === 0 ? "SUCCEEDED" : "FAILED"} label={s.reason || s.state} />
-                    </td>
-                    <td>{s.exitCode ?? "—"}</td>
-                    <td>
-                      <Duration seconds={seconds(s.startedAt, s.finishedAt)} />
-                    </td>
-                    <td>
-                      <button type="button" aria-expanded={open === key} onClick={() => onLog(key)}>
-                        {open === key ? "Hide log" : "View log"}
-                      </button>
-                    </td>
-                  </tr>
-                  {open === key && (
-                    <tr className="log-row">
-                      <td colSpan={6}>
-                        <LogViewer buildId={buildId} taskRun={tr.name} step={s.name} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-    </div>
-  );
-}
-
-// DownloadButton saves text as a file, made in the browser (nothing is
-// fetched again).
-function DownloadButton({ text, filename }: { text: string; filename: string }) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-      }}
-    >
-      ⤓ Download
-    </button>
-  );
-}
-
-// LogViewer shows one step's log as the Tenant CP bounds it: the last lines,
-// marked when truncated, scrolled to its end (what happened last). Not
-// streamed (Decision 0060 §11).
-export function LogViewer({ buildId, taskRun, step }: { buildId: string; taskRun: string; step: string }) {
-  const r = useResource<Log>(
-    `/api/v1/builds/${encodeURIComponent(buildId)}/tasks/${encodeURIComponent(taskRun)}/logs?step=${encodeURIComponent(step)}`,
-  );
-  const pre = useRef<HTMLPreElement>(null);
-  const content = r.data?.content;
-  useEffect(() => {
-    if (pre.current) pre.current.scrollTop = pre.current.scrollHeight;
-  }, [content]);
-  if (r.error) return <ErrorBox error={r.error} />;
-  if (!r.data) return <p className="muted" role="status">Loading the log…</p>;
-  return (
-    <div aria-label={`Log of ${step}`} role="log">
-      {r.data.truncated && (
-        <p>
-          <small>
-            Truncated: the last {r.data.tailLines} lines, at most {Math.round(r.data.limitBytes / 1024)} KiB.
-          </small>
-        </p>
-      )}
-      {/* The actions float over the log's top right corner, outside its
-          scroll, so they stay put while it scrolls. */}
-      <div className="log-box">
-        <pre ref={pre}>{r.data.content || "(empty)"}</pre>
-        <div className="log-actions">
-          <CopyButton text={r.data.content} label={`log of ${step}`} />
-          <DownloadButton text={r.data.content} filename={`${taskRun}-${step}.log`} />
-        </div>
-      </div>
-    </div>
   );
 }

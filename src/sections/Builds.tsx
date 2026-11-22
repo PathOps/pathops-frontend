@@ -41,7 +41,7 @@ export function Builds({ appId }: { appId: string }) {
                       <Status status={x.status} />
                     </td>
                     <td>
-                      <Time at={x.startedAt ?? x.createdAt} />
+                      <Time at={x.startedAt} />
                     </td>
                     <td>
                       <Duration seconds={x.durationSeconds} />

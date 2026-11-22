@@ -8,6 +8,7 @@ import { ApplicationsPage } from "./pages/ApplicationsPage";
 import { BuildPage } from "./pages/BuildPage";
 import { DeliveryPage } from "./pages/DeliveryPage";
 import { DeploymentPage } from "./pages/DeploymentPage";
+import { DeploymentStepPage } from "./pages/DeploymentStepPage";
 import { InboxMessagePage, InboxPage } from "./pages/InboxPage";
 
 // SigningInNotice is "Signing in" with dots that come and go (none, one,
@@ -41,6 +42,7 @@ export function AppRoutes() {
       <Route path="/applications/:appId/deliveries/:runId" element={<DeliveryPage />} />
       <Route path="/applications/:appId/builds/:buildId" element={<BuildPage />} />
       <Route path="/applications/:appId/deployments/:deploymentId" element={<DeploymentPage />} />
+      <Route path="/applications/:appId/deployments/:deploymentId/steps/:type" element={<DeploymentStepPage />} />
       <Route path="/applications/:appId/:section" element={<ApplicationPage />} />
       <Route path="*" element={<main><p className="muted">No such page.</p><Link to="/">Applications</Link></main>} />
     </Routes>

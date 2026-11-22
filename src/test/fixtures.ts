@@ -4,13 +4,15 @@ import type {
   BuildDetail,
   DeliveryDetail,
   DeliverySummary,
+  DeploymentDetail,
   DeploymentRef,
+  DeploymentStepDetail,
   ImageEntry,
   Log,
   Overview,
   Provisioning,
   Repositories,
-  Tasks,
+  TektonExecution,
 } from "../api/types";
 
 export const appId = "11111111-1111-4111-8111-111111111111";
@@ -119,6 +121,7 @@ export const deliveries: { deliveries: DeliverySummary[] } = {
     {
       id: "run-bad",
       number: 2,
+      trigger: "PUSH",
       sourceRevision: badRev,
       head12: badRev.slice(0, 12),
       status: "FAILED",
@@ -126,12 +129,13 @@ export const deliveries: { deliveries: DeliverySummary[] } = {
       startedAt: t1,
       completedAt: t1,
       durationSeconds: 61,
-      sanitizedError: "BUILD_APPLICATION: the PipelineRun manual-web-ci/build-b failed (Failed)",
+      failure: { reason: "BUILD_FAILED", message: "the PipelineRun manual-web-build/build-b failed (Failed)" },
       build: { id: "build-bad", number: 2, status: "FAILED", image: null },
     },
     {
       id: "run-ok",
       number: 1,
+      trigger: "PUSH",
       sourceRevision: okRev,
       head12: okRev.slice(0, 12),
       status: "SUCCEEDED",
@@ -139,40 +143,91 @@ export const deliveries: { deliveries: DeliverySummary[] } = {
       startedAt: t0,
       completedAt: t1,
       durationSeconds: 120,
+      failure: null,
       build: { id: "build-ok", number: 1, status: "SUCCEEDED", image },
     },
   ],
 };
 
-function detail(s: DeliverySummary, step: Partial<DeliveryDetail["steps"][number]> = {}): DeliveryDetail {
+// detail is s with its top-level steps: Build application and, with a
+// Deployment, Deploy preflight (its own steps are the Deployment's page).
+function detail(s: DeliverySummary, deployment?: { id: string; number: number; status: string }): DeliveryDetail {
+  const steps: DeliveryDetail["steps"] = [
+    {
+      position: 1,
+      type: "BUILD_APPLICATION",
+      status: s.build?.status ?? s.status,
+      startedAt: s.startedAt,
+      completedAt: s.completedAt,
+      durationSeconds: s.durationSeconds,
+      failure: s.failure,
+      build: s.build ?? undefined,
+      execution: { executor: "TEKTON", status: s.status, pipelineRun: { namespace: "manual-web-build", name: `build-${s.build?.id}` } },
+    },
+  ];
+  if (deployment)
+    steps.push({
+      position: 2,
+      type: "DEPLOY_PREFLIGHT",
+      status: deployment.status === "IN_PROGRESS" ? "RUNNING" : deployment.status,
+      startedAt: t1,
+      completedAt: t1,
+      durationSeconds: 40,
+      failure: null,
+      deployment: { ...deployment, environment: "PREFLIGHT" },
+      execution: null,
+      steps: [
+        { position: 1, type: "UPDATE_GITOPS", status: "SUCCEEDED", startedAt: t1, completedAt: t1, durationSeconds: 20, failure: null, execution: { executor: "TEKTON", status: "SUCCEEDED" } },
+        { position: 2, type: "RECONCILE", status: "SUCCEEDED", startedAt: t1, completedAt: t1, durationSeconds: 20, failure: null, execution: { executor: "FLUX", status: "SUCCEEDED" } },
+      ],
+    });
   return {
     ...s,
     applicationId: appId,
+    triggerId: "wd-1",
     sourceRepository: "alice/manual-web",
     sourceRef: "refs/heads/main",
-    webhookDeliveryId: "wd-1",
-    steps: [
-      {
-        id: "step-1",
-        position: 1,
-        type: "BUILD_APPLICATION",
-        executor: "TEKTON",
-        status: s.status,
-        externalRef: `pipelinerun:manual-web-ci/build-${s.build?.id}`,
-        sanitizedError: s.sanitizedError?.replace("BUILD_APPLICATION: ", ""),
-        createdAt: s.createdAt,
-        startedAt: s.startedAt,
-        completedAt: s.completedAt,
-        durationSeconds: s.durationSeconds,
-        build: s.build,
-        ...step,
-      },
-    ],
+    steps,
   };
 }
 
-export const deliveryOk = detail(deliveries.deliveries[1]);
+export const deliveryOk = detail(deliveries.deliveries[1], { id: "dep-1", number: 1, status: "SUCCEEDED" });
 export const deliveryBad = detail(deliveries.deliveries[0]);
+
+// execution is a Tekton Execution with its TaskRuns, as PathOps recorded it.
+function execution(name: string, status: string, taskRuns: TektonExecution["taskRuns"], results: TektonExecution["results"]): TektonExecution {
+  return {
+    executor: "TEKTON",
+    status,
+    reason: status === "SUCCEEDED" ? "Succeeded" : "Failed",
+    message: status === "FAILED" ? "Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0" : undefined,
+    createdAt: t0,
+    startedAt: t0,
+    completedAt: t1,
+    observedAt: t1,
+    pipelineRun: { namespace: "manual-web-build", name, uid: `uid-${name}` },
+    triggerEventId: "event-1",
+    triggeredAt: t0,
+    results,
+    refSource: { uri: "git+https://forgejo/alice/manual-web.git", digest: { sha1: okRev }, entryPoint: ".pathops/tekton/pipelines/build-and-push.yaml" },
+    taskRuns,
+  };
+}
+
+const step = (name: string, exitCode = 0) => ({ name, state: "terminated", reason: exitCode ? "Error" : "Completed", exitCode, startedAt: t0, finishedAt: t1 });
+const taskRun = (name: string, pipelineTask: string, status: string, steps: ReturnType<typeof step>[]) => ({
+  name,
+  pipelineTask,
+  task: pipelineTask,
+  status,
+  reason: status === "SUCCEEDED" ? "Succeeded" : "Failed",
+  startedAt: t0,
+  completedAt: t1,
+  observedAt: t1,
+  results: [],
+  refSource: null,
+  steps,
+});
 
 export const buildOk: BuildDetail = {
   id: "build-ok",
@@ -180,60 +235,26 @@ export const buildOk: BuildDetail = {
   applicationId: appId,
   deliveryRunId: "run-ok",
   deliveryNumber: 1,
-  deliveryStepId: "step-1-uuid",
   sourceRevision: okRev,
   head12: okRev.slice(0, 12),
   status: "SUCCEEDED",
-  createdAt: t0,
   startedAt: t0,
   completedAt: t1,
   durationSeconds: 120,
-  pipelineRun: { namespace: "manual-web-ci", name: "build-build-ok" },
-  triggerEventId: "event-1",
-  triggeredAt: t0,
+  failure: null,
   image,
-  observation: "observed",
-  pipelineRunStatus: {
-    status: "True",
-    reason: "Succeeded",
-    startTime: t0,
-    completionTime: t1,
-    results: [
+  execution: execution(
+    "build-build-ok",
+    "SUCCEEDED",
+    [taskRun("build-build-ok-build-image", "build-image", "SUCCEEDED", ["checkout", "build", "push"].map((n) => step(n)))],
+    [
       { name: "sourceCommit", value: okRev },
       { name: "imageDigest", value: digest },
     ],
-    taskRuns: [{ name: "build-build-ok-build-image", pipelineTask: "build-image" }],
-  },
-};
-
-export const tasksOk: Tasks = {
-  buildId: "build-ok",
-  observation: "observed",
-  taskRuns: [
-    {
-      name: "build-build-ok-build-image",
-      pipelineTask: "build-image",
-      task: "build-image",
-      observation: "observed",
-      status: "True",
-      reason: "Succeeded",
-      startTime: t0,
-      completionTime: t1,
-      steps: ["checkout", "build", "push"].map((name) => ({
-        name,
-        state: "terminated",
-        reason: "Completed",
-        exitCode: 0,
-        startedAt: t0,
-        finishedAt: t1,
-      })),
-      results: [{ name: "imageDigest", value: digest }],
-    },
-  ],
+  ),
 };
 
 export const buildLog: Log = {
-  buildId: "build-ok",
   taskRun: "build-build-ok-build-image",
   step: "build",
   content: "#1 building\nexporting to oci image format\n",
@@ -268,40 +289,21 @@ export const buildBad: BuildDetail = {
   deliveryNumber: 2,
   status: "FAILED",
   image: null,
-  sanitizedError: "the PipelineRun manual-web-ci/build-b failed (Failed)",
-  pipelineRun: { namespace: "manual-web-ci", name: "build-b" },
-  pipelineRunStatus: {
-    status: "False",
-    reason: "Failed",
-    message: "Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0",
-    startTime: t0,
-    completionTime: t1,
-    results: [],
-    taskRuns: [
-      { name: "build-b-lint", pipelineTask: "lint" },
-      { name: "build-b-build-image", pipelineTask: "build-image" },
+  failure: { reason: "BUILD_FAILED", message: "the PipelineRun manual-web-build/build-b failed (Failed)" },
+  evidence: "STORED",
+  execution: execution(
+    "build-b",
+    "FAILED",
+    [
+      taskRun("build-b-lint", "lint", "SUCCEEDED", [step("checkout")]),
+      taskRun("build-b-build-image", "build-image", "FAILED", [step("checkout"), step("build", 1)]),
     ],
-  },
-};
-
-export const tasksBad: Tasks = {
-  buildId: "build-bad",
-  observation: "observed",
-  taskRuns: [
-    { ...tasksOk.taskRuns[0], name: "build-b-lint", pipelineTask: "lint", task: "lint", steps: [tasksOk.taskRuns[0].steps[0]], results: [] },
-    {
-      ...tasksOk.taskRuns[0],
-      name: "build-b-build-image",
-      status: "False",
-      reason: "Failed",
-      steps: [tasksOk.taskRuns[0].steps[0], { ...tasksOk.taskRuns[0].steps[1], reason: "Error", exitCode: 1 }],
-      results: [],
-    },
-  ],
+    [],
+  ),
 };
 
 export function logOf(taskRun: string, step: string, content: string): Log {
-  return { buildId: "build-bad", taskRun, step, content, truncated: false, limitBytes: 262144, tailLines: 4000 };
+  return { taskRun, step, content, truncated: false, limitBytes: 262144, tailLines: 4000 };
 }
 
 // deployment is Deployment #1: Preflight, succeeded, of delivery #1.
@@ -316,10 +318,97 @@ export const deployment: DeploymentRef = {
   head12: okRev.slice(0, 12),
   image: null,
   imageReference: `zot-test.example/apps/${appId}:${okRev.slice(0, 12)}@${digest}`,
-  gitopsRepository: "alice/hello-gitops-preflight",
-  gitopsTaskRevision: "1111111111111111111111111111111111111111",
   gitopsCommit: "2222222222222222222222222222222222222222",
+  tests: null,
+  failure: null,
   startedAt: "2026-11-20T10:00:00Z",
   completedAt: "2026-11-20T10:02:00Z",
   durationSeconds: 120,
+};
+
+export const baseCommit = "1111111111111111111111111111111111111111";
+export const gitopsG = "2222222222222222222222222222222222222222";
+
+// deploymentDetail is Deployment #1 with its Build and its two steps.
+export const deploymentDetail: DeploymentDetail = {
+  ...deployment,
+  build: { id: "build-ok", number: 1, status: "SUCCEEDED" },
+  steps: [
+    {
+      position: 1,
+      type: "UPDATE_GITOPS",
+      status: "SUCCEEDED",
+      startedAt: "2026-11-20T10:00:00Z",
+      completedAt: "2026-11-20T10:00:30Z",
+      durationSeconds: 30,
+      failure: null,
+      gitopsUpdate: { repository: "alice/hello-gitops-preflight", baseCommit, resultingCommit: gitopsG },
+      execution: { executor: "TEKTON", status: "SUCCEEDED", pipelineRun: { namespace: "hello-preflight-update", name: "update-preflight-dep-1" } },
+    },
+    {
+      position: 2,
+      type: "RECONCILE",
+      status: "SUCCEEDED",
+      startedAt: "2026-11-20T10:00:30Z",
+      completedAt: "2026-11-20T10:02:00Z",
+      durationSeconds: 90,
+      failure: null,
+      reconciliation: { targetRevision: gitopsG },
+      execution: { executor: "FLUX", status: "SUCCEEDED" },
+    },
+  ],
+};
+
+// updateStep is the Update GitOps step's page: its GitOpsUpdate and its
+// Tekton Execution (resolved from the base commit).
+export const updateStep: DeploymentStepDetail = {
+  ...deploymentDetail.steps[0],
+  deploymentId: "dep-1",
+  deploymentNumber: 1,
+  execution: {
+    ...execution(
+      "update-preflight-dep-1",
+      "SUCCEEDED",
+      [taskRun("update-preflight-dep-1-update", "update-preflight-gitops", "SUCCEEDED", ["checkout", "update", "push"].map((n) => step(n)))],
+      [{ name: "gitopsCommit", value: gitopsG }],
+    ),
+    pipelineRun: { namespace: "hello-preflight-update", name: "update-preflight-dep-1" },
+    refSource: { digest: { sha1: baseCommit }, entryPoint: ".pathops/tekton/pipelines/update-preflight-gitops.yaml" },
+  },
+};
+
+// reconcileStep is the Reconcile step's page: its target (G) and the Flux
+// snapshots of exactly G.
+export const reconcileStep: DeploymentStepDetail = {
+  ...deploymentDetail.steps[1],
+  deploymentId: "dep-1",
+  deploymentNumber: 1,
+  execution: {
+    executor: "FLUX",
+    status: "SUCCEEDED",
+    startedAt: "2026-11-20T10:00:30Z",
+    completedAt: "2026-11-20T10:02:00Z",
+    observedAt: "2026-11-20T10:02:00Z",
+    namespace: "hello-preflight-deploy",
+    baselineRevision: baseCommit,
+    gitRepository: {
+      name: "hello-gitops-preflight",
+      found: true,
+      generation: 1,
+      observedGeneration: 1,
+      artifactRevision: `main@sha1:${gitopsG}`,
+      ready: { status: "True", reason: "Succeeded" },
+      observedAt: "2026-11-20T10:01:00Z",
+    },
+    kustomization: {
+      name: "hello-preflight",
+      found: true,
+      generation: 2,
+      observedGeneration: 2,
+      lastAttemptedRevision: `main@sha1:${gitopsG}`,
+      lastAppliedRevision: `main@sha1:${gitopsG}`,
+      ready: { status: "True", reason: "ReconciliationSucceeded", message: "Applied revision: main@sha1:2222" },
+      observedAt: "2026-11-20T10:02:00Z",
+    },
+  },
 };

@@ -76,10 +76,9 @@ of the list shows its control disabled, a list of one page none.
   last delivery, provisioning; Production "not created yet"; Preflight its
   state, `Healthy — 2h`, never a Deployment or Delivery number; "not created
   yet" without Preflight) and the tabs Production, Preflight, Delivery,
-  Validations, Deployments, Images, Builds, Repositories, Provisioning.
-  Production says its environment has not been created yet, Validations that
-  there are none (the Tenant Control Plane runs no validations yet), Preflight
-  the same without Preflight; Deployments is always there, empty before the
+  Deployments, Images, Builds, Repositories, Provisioning (no Validations tab:
+  a Validation is shown in its Deployment, Decision 0066). Production says its
+  environment has not been created yet, Preflight the same without Preflight; Deployments is always there, empty before the
   first; the others appear when the Tenant Control Plane names them
   (`overview.sections`).
 - **Preflight**: how the environment is now, not how it was deployed: Status
@@ -95,33 +94,42 @@ of the list shows its control disabled, a list of one page none.
   (a temporary rule: with Validation execution, Validating while they run,
   Unstable when they fail, Healthy when they succeed). Deployment #5 may be
   Succeeded while its environment is Unstable.
-- **Tables**: Deployments `# | Commit | Environment | Status | Started |
-  Duration | Delivery` (Status is the Deployment's own: In progress,
-  Succeeded, Failed), Builds `# | Commit | Status | Started | Duration |
-  Delivery`, Images `Tag | Environment | Digest | Build | Created`
-  (Validations' table, for when they exist: `# | Commit | Environment |
-  Status | Tests | Started | Duration | Delivery`). Commit is the source
+- **Tables**: Deployments `# | Commit | Environment | Status | Tests |
+  Started | Duration | Delivery` (Status is the Deployment's own: In progress,
+  Succeeded, Failed; Tests its Validation's `passed/total`, `—` until
+  Validation exists), Builds `# | Commit | Status | Started | Duration |
+  Delivery`, Images `Tag | Environment | Digest | Build | Created`. Commit is the source
   commit's first 12 characters, Delivery the delivery run's `#N` linked, a
   Deployment's `#N` its page. An image's Environment is where it runs now:
   `Preflight`, `Production`, `Preflight, Production` (a promotion reuses the
   artifact) or `—`, from each environment's current Deployment, never
   history. An environment is plain words: color is for statuses. Images copy
   each image's pinned reference (`repository@digest`) beside its tag.
+- **Delivery run** (Decision 0066): its facts (commit, source, trigger and
+  delivery id, times, error), its top-level steps in order (`# | Step |
+  Status | Started | Duration | Details`: Build application links its Build,
+  Deploy preflight its Deployment; a new step type appears without a UI
+  change; a failed step's error under it) and the OCI image (or "No image").
 - **Deployment**: `Deployment #N`: environment, status (and its error),
   commit, image (its digest, a copy of the reference and the Build that
-  produced it), delivery, start, duration and GitOps commit.
-- **Delivery run**: its facts (commit, source, times, error), its DeliverySteps
-  latest first (a new step type appears without a UI change), and the OCI
-  image (or "No image"). A step's details are its build tree, one
-  summary row per Build, PipelineRun and TaskRun, then the steps, each level
-  a short indent in and hung from its parent by a dashed right angle; a failed
-  step starts open. A step's error shows once, as
-  the run's Error (under the step only when it has no build).
-- **Build**: its facts (Build ID first) and delivery, the PipelineRun's status
-  and results (named in words: Image Digest), its TaskRuns (each a facts
-  table) and their steps, numbered in execution order. Each step's log (the last 4000 lines, at most
-  256 KiB, as the Tenant Control Plane bounds it; not streamed) opens in the
-  row under the step, one at a time.
+  produced it), Tests (`—`), delivery, start, duration and GitOps commit (G);
+  then its steps, Update GitOps and Reconcile, each linking its page.
+- **Deployment step** (`/applications/<id>/deployments/<id>/steps/<TYPE>`):
+  Update GitOps shows its GitOpsUpdate (repository, base commit, resulting
+  commit) and its PipelineRun; Reconcile its Reconciliation (target revision,
+  G) and its Flux execution: baseline revision and the last observed
+  GitRepository and Kustomization (revision, generation, Ready, message; "did
+  not exist" or "not observed").
+- **Build** and **Update GitOps**: the PipelineRun as PathOps recorded it
+  (status, times, results named in words, where Tekton resolved it from),
+  its TaskRuns (each a facts table) and their steps, numbered in execution
+  order, with exit codes; the history stays after Tekton prunes it. Each
+  step's log (the last 4000 lines, at most 256 KiB, as the Tenant Control
+  Plane bounds it; read live, never stored, so "no longer available" once its
+  Pod is gone) opens in the row under the step, one at a time.
+- Every page of a Delivery, Build or Deployment reads the Tenant Control
+  Plane's Application-scoped routes (`/applications/<id>/deliveries|builds|
+  deployments/<uuid or number>`).
 
 - **Inbox** (Decision 0061): the header shows **Inbox** with the unread
   count. `/inbox` lists messages like a mail inbox, newest first: number,

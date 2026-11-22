@@ -6,7 +6,6 @@ import { authorizationUrl, completeSignIn, loadConfig, resetForTests, signedIn }
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../App";
 import { Ago, Duration, EnvironmentLabel, Status } from "../components/ui";
-import { ValidationsTable } from "../sections/Validations";
 import type { DeliveryDetail } from "../api/types";
 import { fakeApi, renderAt } from "../test/render";
 import * as f from "../test/fixtures";
@@ -23,16 +22,14 @@ const all = {
   [`${app}/images`]: f.images,
   [`${app}/builds`]: { builds: [] },
   [`${app}/deployments`]: { deployments: [], nextCursor: null, previousCursor: null },
-  "/api/v1/builds/build-ok": f.buildOk,
-  "/api/v1/builds/build-ok/tasks": f.tasksOk,
-  "/api/v1/builds/build-ok/tasks/build-build-ok-build-image/logs?step=checkout": { ...f.buildLog, step: "checkout", content: "cloned" },
-  "/api/v1/builds/build-ok/tasks/build-build-ok-build-image/logs?step=build": f.buildLog,
-  "/api/v1/builds/build-ok/tasks/build-build-ok-build-image/logs?step=push": { ...f.buildLog, step: "push", content: "pushed" },
-  "/api/v1/builds/build-bad": f.buildBad,
-  "/api/v1/builds/build-bad/tasks": f.tasksBad,
-  "/api/v1/builds/build-bad/tasks/build-b-lint/logs?step=checkout": f.logOf("build-b-lint", "checkout", "lint checkout ok"),
-  "/api/v1/builds/build-bad/tasks/build-b-build-image/logs?step=checkout": f.logOf("build-b-build-image", "checkout", "image checkout ok"),
-  "/api/v1/builds/build-bad/tasks/build-b-build-image/logs?step=build": f.logOf("build-b-build-image", "build", "ERROR: failed to solve"),
+  [`${app}/builds/build-ok`]: f.buildOk,
+  [`${app}/builds/build-ok/tasks/build-build-ok-build-image/logs?step=checkout`]: { ...f.buildLog, step: "checkout", content: "cloned" },
+  [`${app}/builds/build-ok/tasks/build-build-ok-build-image/logs?step=build`]: f.buildLog,
+  [`${app}/builds/build-ok/tasks/build-build-ok-build-image/logs?step=push`]: { ...f.buildLog, step: "push", content: "pushed" },
+  [`${app}/builds/build-bad`]: f.buildBad,
+  [`${app}/builds/build-bad/tasks/build-b-lint/logs?step=checkout`]: f.logOf("build-b-lint", "checkout", "lint checkout ok"),
+  [`${app}/builds/build-bad/tasks/build-b-build-image/logs?step=checkout`]: f.logOf("build-b-build-image", "checkout", "image checkout ok"),
+  [`${app}/builds/build-bad/tasks/build-b-build-image/logs?step=build`]: f.logOf("build-b-build-image", "build", "ERROR: failed to solve"),
 };
 
 describe("Applications", () => {
@@ -94,7 +91,6 @@ describe("Application", () => {
       "Production",
       "Preflight",
       "Delivery",
-      "Validations",
       "Deployments",
       "Images",
       "Builds",
@@ -110,7 +106,6 @@ describe("Application", () => {
     for (const [planned, state] of [
       ["Production", "The production environment has not been created yet."],
       ["Preflight", "The preflight environment has not been created yet."],
-      ["Validations", "No validations yet."],
       ["Deployments", "Nothing here yet."],
     ]) {
       await userEvent.click(within(tabs).getByRole("link", { name: planned }));
@@ -190,80 +185,56 @@ describe("Application", () => {
 });
 
 describe("Delivery run", () => {
-  it("shows a succeeded run: its facts, its steps and the image", async () => {
+  it("shows a succeeded run: its facts, its top-level steps and the image", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-ok`, fakeApi(all));
     expect(await screen.findByRole("heading", { level: 1, name: "Delivery #1" })).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Delivery run" })).toHaveTextContent(f.okRev);
-    expect(within(screen.getByRole("table", { name: "Delivery run" })).getAllByRole("rowheader")[0]).toHaveTextContent("Run ID");
+    const facts = screen.getByRole("table", { name: "Delivery run" });
+    expect(facts).toHaveTextContent(f.okRev);
+    expect(within(facts).getAllByRole("rowheader")[0]).toHaveTextContent("Run ID");
+    expect(within(facts).getByRole("row", { name: /^Trigger/ })).toHaveTextContent("Push wd-1");
     const steps = screen.getByRole("table", { name: "Delivery steps" });
-    expect(steps).toHaveTextContent("Build application");
-    expect(within(steps).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
-    expect(within(steps).queryByRole("group", { name: "Build tree" })).toBeNull();
+    expect(within(steps).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["#", "Step", "Status", "Started", "Duration", "Details"]);
+    const rows = within(steps).getAllByRole("row").slice(1);
+    // Only the top-level steps, in order: a Deployment's own steps are its page's.
+    expect(rows.map((r) => within(r).getAllByRole("cell")[1].textContent)).toEqual(["Build application", "Deploy preflight"]);
+    expect(steps).not.toHaveTextContent("Update gitops");
+    expect(steps).not.toHaveTextContent("Reconcile");
+    expect(within(rows[0]).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/builds/build-ok`);
+    expect(within(rows[1]).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deployments/dep-1`);
+    expect(rows[1]).toHaveTextContent("Preflight");
     expect(screen.getByRole("table", { name: "Image" })).toHaveTextContent(f.digest);
   });
 
-  it("shows a failed run's error and no image", async () => {
+  it("shows a failed run's error, the failed step's under it, and no image", async () => {
     renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
-    expect(await screen.findByRole("alert")).toHaveTextContent("BUILD_APPLICATION: the PipelineRun manual-web-ci/build-b failed (Failed)");
-    // The step's error is the run's: shown once, in the run's facts.
-    expect(screen.getByRole("table", { name: "Delivery steps" })).not.toHaveTextContent("failed (Failed)");
-    expect(screen.getByText("No image: the run failed, nothing was published.")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Build failed: the PipelineRun manual-web-build/build-b failed (Failed)");
+    const steps = screen.getByRole("table", { name: "Delivery steps" });
+    expect(within(steps).getAllByRole("row")[2]).toHaveTextContent("Build failed: the PipelineRun manual-web-build/build-b failed (Failed)");
+    expect(screen.getByText("No image: the build did not produce one.")).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Image" })).toBeNull();
   });
 
-  it("opens a failed step as its build tree, with one step's log open at a time under its step", async () => {
-    renderAt(`/applications/${f.appId}/deliveries/run-bad`, fakeApi(all));
-    const tree = await screen.findByRole("group", { name: "Build tree" });
-    expect(tree).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
-    // No error row under a step with a build; the PipelineRun's name is cut short.
-    const steps = screen.getByRole("table", { name: "Delivery steps" });
-    expect(within(steps).queryByText(/^the PipelineRun manual-web-ci\/build-b failed/)).toBeNull();
-    expect(within(tree).getByTitle("manual-web-ci/build-b")).toHaveTextContent("build-b");
-    expect(within(within(tree).getByRole("table", { name: "Build summary" })).getByRole("link", { name: "#2" })).toHaveAttribute(
-      "href",
-      `/applications/${f.appId}/builds/build-bad`,
-    );
-    // One summary row per level, one under the other.
-    const pr = within(tree).getByRole("table", { name: "PipelineRun" });
-    expect(pr.querySelectorAll(":scope > tbody > tr")).toHaveLength(1);
-    expect(pr.parentElement).toHaveClass("level");
-    expect(pr.parentElement!.parentElement).toBe(tree);
-    const lint = await within(tree).findByRole("group", { name: "TaskRun lint" });
-    const image = within(tree).getByRole("group", { name: "TaskRun build-image" });
-    expect(within(image).getByRole("table", { name: "TaskRun build-image summary" })).toHaveTextContent("build-image");
-    // Steps latest first: build, then checkout.
-    await userEvent.click(within(image).getAllByRole("button", { name: "View log" })[0]);
-    const log = await within(image).findByRole("log", { name: "Log of build" });
-    expect(log).toHaveTextContent("ERROR: failed to solve");
-    // The log is the row right under its step's row.
-    const stepRow = within(image).getByRole("cell", { name: "build" }).closest("tr")!;
-    expect(stepRow.nextElementSibling).toContainElement(log);
-    await userEvent.click(within(lint).getByRole("button", { name: "View log" }));
-    expect(await within(lint).findByText("lint checkout ok")).toBeInTheDocument();
-    expect(within(image).queryByRole("log", { name: "Log of build" })).toBeNull();
-  });
-
-  it("renders the steps the Tenant CP returns latest first, including types it does not know yet", async () => {
+  it("renders the top-level steps the Tenant CP returns in order, including types it does not know yet", async () => {
     const future: DeliveryDetail = {
       ...f.deliveryOk,
       status: "RUNNING",
       completedAt: null,
-      build: null,
-      steps: [
-        { ...f.deliveryOk.steps[0], position: 2, id: "s2", type: "UPDATE_PREFLIGHT_GITOPS", status: "RUNNING", executor: "TEKTON", build: null },
-        f.deliveryOk.steps[0],
-      ],
+      steps: [{ ...f.deliveryOk.steps[0], position: 3, type: "DEPLOY_PRODUCTION", status: "PENDING", build: undefined }, ...f.deliveryOk.steps],
     };
     renderAt(`/applications/${f.appId}/deliveries/run-x`, fakeApi({ [`${app}/deliveries/run-x`]: future }));
     const steps = await screen.findByRole("table", { name: "Delivery steps" });
     const rows = within(steps).getAllByRole("row").slice(1);
-    expect(rows[0]).toHaveTextContent("Update preflight gitops");
-    expect(rows[1]).toHaveTextContent("Build application");
+    expect(rows.map((r) => within(r).getAllByRole("cell")[1].textContent)).toEqual(["Build application", "Deploy preflight", "Deploy production"]);
+  });
+
+  it("is read by number too: /deliveries/1 is the same run", async () => {
+    renderAt(`/applications/${f.appId}/deliveries/1`, fakeApi({ ...all, [`${app}/deliveries/1`]: f.deliveryOk }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Delivery #1" })).toBeInTheDocument();
   });
 });
 
 describe("Build", () => {
-  it("shows the build by number, its PipelineRun, TaskRuns, steps and a bounded log", async () => {
+  it("shows the build, its PipelineRun as recorded, TaskRuns, steps and a bounded live log", async () => {
     renderAt(`/applications/${f.appId}/builds/build-ok`, fakeApi(all));
     expect(await screen.findByRole("heading", { level: 1, name: "Build #1" })).toBeInTheDocument();
     const facts = screen.getByRole("table", { name: "Build" });
@@ -271,13 +242,13 @@ describe("Build", () => {
     const delivery = within(facts).getByRole("row", { name: /^Delivery/ });
     expect(within(delivery).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
     const pr = screen.getByRole("table", { name: "PipelineRun" });
-    expect(pr).toHaveTextContent("manual-web-ci/build-build-ok");
+    expect(pr).toHaveTextContent("manual-web-build/build-build-ok");
     expect(within(pr).getByRole("rowheader", { name: "Image Digest" })).toBeInTheDocument();
-    const tasks = await screen.findByRole("region", { name: "TaskRuns" });
-    await waitFor(() => expect(tasks).toHaveTextContent("build-image"));
+    // Where Tekton resolved the Pipeline from (its provenance).
+    expect(within(within(pr).getByRole("row", { name: /^Resolved from/ })).getByTitle(f.okRev)).toBeInTheDocument();
+    const tasks = screen.getByRole("region", { name: "TaskRuns" });
     const tr = within(tasks).getByRole("table", { name: "TaskRun build-image facts" });
     expect(tr).toHaveTextContent("build-build-ok-build-image");
-    expect(tasks).not.toHaveTextContent("Results:");
     for (const step of ["checkout", "build", "push"]) expect(within(tasks).getByText(step)).toBeInTheDocument();
     const steps = within(tasks).getAllByRole("row").slice(-3).map((r) => r.textContent?.slice(0, 2));
     expect(steps).toEqual(["3p", "2b", "1c"]);
@@ -288,7 +259,6 @@ describe("Build", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     await userEvent.click(within(log).getByRole("button", { name: "Copy log of build" }));
     expect(writeText).toHaveBeenCalledWith(f.buildLog.content);
-    // "Copied" shows in a bubble over the button for a moment, then goes.
     expect(await within(log).findByRole("status")).toHaveTextContent(/^Copied$/);
     await waitFor(() => expect(within(log).queryByRole("status")).toBeNull(), { timeout: 3000 });
     const created: Blob[] = [];
@@ -311,13 +281,30 @@ describe("Build", () => {
     expect(log).toHaveTextContent("Truncated: the last 4000 lines, at most 256 KiB.");
   });
 
-  it("says when Tekton no longer has the PipelineRun", async () => {
-    const gone = { ...f.buildOk, observation: "not_found", pipelineRunStatus: null };
-    renderAt(`/applications/${f.appId}/builds/build-ok`, fakeApi({
-      "/api/v1/builds/build-ok": gone,
-      "/api/v1/builds/build-ok/tasks": { buildId: "build-ok", observation: "not_found", taskRuns: [] },
-    }));
-    expect((await screen.findAllByText(/no longer has this PipelineRun/)).length).toBeGreaterThan(0);
+  it("shows a failed build's error and its failed step's exit code; one log open at a time", async () => {
+    renderAt(`/applications/${f.appId}/builds/build-bad`, fakeApi(all));
+    const facts = await screen.findByRole("table", { name: "Build" });
+    expect(facts).toHaveTextContent("Build failed: the PipelineRun manual-web-build/build-b failed (Failed)");
+    const pr = screen.getByRole("table", { name: "PipelineRun" });
+    expect(pr).toHaveTextContent("Tasks Completed: 2 (Failed: 1, Cancelled 0), Skipped: 0");
+    const lint = screen.getByRole("group", { name: "TaskRun lint" });
+    const image = screen.getByRole("group", { name: "TaskRun build-image" });
+    expect(within(image).getByRole("cell", { name: "build" }).closest("tr")).toHaveTextContent("1");
+    await userEvent.click(within(image).getAllByRole("button", { name: "View log" })[0]);
+    const log = await within(image).findByRole("log", { name: "Log of build" });
+    expect(log).toHaveTextContent("ERROR: failed to solve");
+    expect(within(image).getByRole("cell", { name: "build" }).closest("tr")!.nextElementSibling).toContainElement(log);
+    await userEvent.click(within(lint).getByRole("button", { name: "View log" }));
+    expect(await within(lint).findByText("lint checkout ok")).toBeInTheDocument();
+    expect(within(image).queryByRole("log", { name: "Log of build" })).toBeNull();
+  });
+
+  it("keeps the history after Tekton pruned it: the log says it is gone", async () => {
+    renderAt(`/applications/${f.appId}/builds/build-ok`, fakeApi({ [`${app}/builds/build-ok`]: f.buildOk }));
+    const tasks = await screen.findByRole("region", { name: "TaskRuns" });
+    expect(within(tasks).getByText("push")).toBeInTheDocument();
+    await userEvent.click(within(tasks).getAllByRole("button", { name: "View log" })[0]);
+    expect(await within(tasks).findByText(/The log is no longer available/)).toBeInTheDocument();
   });
 });
 
@@ -833,24 +820,6 @@ describe("Preflight (Decision 0064)", () => {
     }
   });
 
-  it("shows a delivery step's Deployment in its details", async () => {
-    const run: DeliveryDetail = {
-      ...f.deliveryOk,
-      steps: [
-        { ...f.deliveryOk.steps[0], position: 3, id: "s3", type: "DEPLOY_PREFLIGHT", executor: "FLUX", build: null, deployment: dep,
-          externalRef: "kustomization:hello-preflight-deploy/hello-preflight" },
-        f.deliveryOk.steps[0],
-      ],
-    };
-    renderAt(`/applications/${f.appId}/deliveries/run-p`, fakeApi({ [`${app}/deliveries/run-p`]: run }));
-    const steps = await screen.findByRole("table", { name: "Delivery steps" });
-    const row = within(steps).getAllByRole("row")[1];
-    expect(row).toHaveTextContent("Deploy preflight");
-    await userEvent.click(within(row).getByRole("button", { name: "Show" }));
-    const facts = await screen.findByRole("table", { name: "Deployment #1" });
-    expect(facts).toHaveTextContent(dep.imageReference);
-    expect(screen.getByText("kustomization:hello-preflight-deploy/hello-preflight")).toBeInTheDocument();
-  });
 });
 
 describe("Deployments", () => {
@@ -864,8 +833,7 @@ describe("Deployments", () => {
     sourceRevision: "bbbbbbbbbbbbcccccccccccccccccccccccccccc",
     head12: "bbbbbbbbbbbb",
     gitopsCommit: undefined,
-    failureReason: "FLUX_RECONCILIATION_FAILED",
-    failureMessage: "Ready=False",
+    failure: { reason: "FLUX_RECONCILIATION_FAILED", message: "Ready=False" },
     startedAt: "2026-11-20T11:00:00Z",
     completedAt: "2026-11-20T11:05:00Z",
     durationSeconds: 300,
@@ -877,7 +845,7 @@ describe("Deployments", () => {
   };
   const rows = (region: HTMLElement) => within(region).getAllByRole("row").slice(1);
 
-  it("lists Deployments newest first: # Commit Environment Status Started Duration Delivery", async () => {
+  it("lists Deployments newest first: # Commit Environment Status Tests Started Duration Delivery", async () => {
     const api = fakeApi({ ...all, [`${app}/deployments`]: { deployments: [failed, f.deployment], nextCursor: null, previousCursor: null } });
     renderAt(`/applications/${f.appId}/deployments`, api);
     const list = await screen.findByRole("region", { name: "Deployments" });
@@ -887,11 +855,14 @@ describe("Deployments", () => {
       "Commit",
       "Environment",
       "Status",
+      "Tests",
       "Started",
       "Duration",
       "Delivery",
     ]);
     const [first, second] = rows(list);
+    // No Validation yet: Tests is —.
+    expect(within(first).getAllByRole("cell")[4]).toHaveTextContent(/^—$/);
     // As the Tenant CP orders them: #2 (the newest) first.
     expect(within(first).getAllByRole("cell")[0]).toHaveTextContent(/^#2$/);
     expect(within(second).getAllByRole("cell")[0]).toHaveTextContent(/^#1$/);
@@ -905,26 +876,27 @@ describe("Deployments", () => {
     expect(within(first).getByText("bbbbbbbbbbbb")).toHaveAttribute("title", failed.sourceRevision);
     // The environment is plain words: color is for the status.
     expect(within(first).getByText("Preflight").className).toBe("");
-    expect(within(within(first).getAllByRole("cell")[6]).getByRole("link", { name: "#2" })).toHaveAttribute(
+    expect(within(within(first).getAllByRole("cell")[7]).getByRole("link", { name: "#2" })).toHaveAttribute(
       "href",
       `/applications/${f.appId}/deliveries/run-bad`,
     );
-    expect(within(first).getAllByRole("cell")[5]).toHaveTextContent("5m 00s");
+    expect(within(first).getAllByRole("cell")[6]).toHaveTextContent("5m 00s");
     // The succeeded one: the 12-character commit, its delivery.
     expect(within(second).getByText("Succeeded")).toHaveClass("status-ok");
     expect(within(second).getByText(f.okRev.slice(0, 12))).toHaveAttribute("title", f.okRev);
-    expect(within(within(second).getAllByRole("cell")[6]).getByRole("link", { name: "#1" })).toHaveAttribute(
+    expect(within(within(second).getAllByRole("cell")[7]).getByRole("link", { name: "#1" })).toHaveAttribute(
       "href",
       `/applications/${f.appId}/deliveries/run-ok`,
     );
     expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
   });
 
-  it("is a tab between Validations and Images; empty, it says so", async () => {
+  it("is a tab between Delivery and Images (no Validations tab); empty, it says so", async () => {
     renderAt(`/applications/${f.appId}/deployments`, fakeApi(all));
     const tabs = await screen.findByRole("navigation", { name: "Application sections" });
     const names = within(tabs).getAllByRole("link").map((l) => l.textContent);
-    expect(names.slice(names.indexOf("Validations"), names.indexOf("Validations") + 3)).toEqual(["Validations", "Deployments", "Images"]);
+    expect(names).not.toContain("Validations");
+    expect(names.slice(names.indexOf("Delivery"), names.indexOf("Delivery") + 3)).toEqual(["Delivery", "Deployments", "Images"]);
     const list = await screen.findByRole("region", { name: "Deployments" });
     expect(await within(list).findByText("Nothing here yet.")).toBeInTheDocument();
     expect(within(list).queryByRole("table")).not.toBeInTheDocument();
@@ -961,44 +933,6 @@ describe("Environment", () => {
       expect(screen.getByText(name).className).toBe("");
       expect(screen.getByText(name).tagName).not.toBe("STRONG");
     }
-  });
-});
-
-describe("Validations table", () => {
-  it("is # Commit Environment Status Tests Started Duration Delivery, its environment the same label as Deployments'", () => {
-    const v = {
-      id: "v-1",
-      number: 1,
-      sourceRevision: f.okRev,
-      environment: "PRODUCTION",
-      status: "SUCCEEDED",
-      tests: { passed: 12, total: 12 },
-      startedAt: "2026-11-20T10:00:00Z",
-      durationSeconds: 42,
-      deliveryRunId: "run-ok",
-      deliveryNumber: 1,
-    };
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <ValidationsTable appId={f.appId} validations={[v, { ...v, id: "v-2", number: 2, environment: "PREFLIGHT", tests: null }]} />
-      </MemoryRouter>,
-    );
-    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
-      "#",
-      "Commit",
-      "Environment",
-      "Status",
-      "Tests",
-      "Started",
-      "Duration",
-      "Delivery",
-    ]);
-    const [first, second] = screen.getAllByRole("row").slice(1);
-    expect(within(first).getByText("Production").className).toBe("");
-    expect(within(first).getByText("12/12")).toBeInTheDocument();
-    expect(within(first).getByText(f.okRev.slice(0, 12))).toBeInTheDocument();
-    expect(within(first).getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deliveries/run-ok`);
-    expect(within(second).getByText("Preflight").className).toBe("");
   });
 });
 
@@ -1043,15 +977,21 @@ describe("Images Environment", () => {
 });
 
 describe("Deployment page", () => {
-  const detail = { ...f.deployment, build: { id: "build-ok", number: 1, status: "SUCCEEDED" } };
   const api = () =>
     fakeApi({
       ...all,
       [`${app}/deployments`]: { deployments: [f.deployment], nextCursor: null, previousCursor: null },
-      [`${app}/deployments/dep-1`]: detail,
+      [`${app}/deployments/dep-1`]: f.deploymentDetail,
+      [`${app}/deployments/dep-1/steps/UPDATE_GITOPS`]: f.updateStep,
+      [`${app}/deployments/dep-1/steps/RECONCILE`]: f.reconcileStep,
+      [`${app}/deployments/dep-1/steps/UPDATE_GITOPS/tasks/update-preflight-dep-1-update/logs?step=push`]: f.logOf(
+        "update-preflight-dep-1-update",
+        "push",
+        "pushed " + f.gitopsG,
+      ),
     });
 
-  it("opens from # in Deployments: Deployment #N, its environment, status, commit, image, delivery, times, GitOps commit", async () => {
+  it("opens from # in Deployments: its facts, Tests —, and its steps Update GitOps and Reconcile", async () => {
     renderAt(`/applications/${f.appId}/deployments`, api());
     const list = await screen.findByRole("region", { name: "Deployments" });
     await waitFor(() => expect(within(list).getAllByRole("row")).toHaveLength(2));
@@ -1064,6 +1004,7 @@ describe("Deployment page", () => {
       "Status",
       "Commit",
       "Image",
+      "Tests",
       "Delivery",
       "Started",
       "Duration",
@@ -1071,14 +1012,22 @@ describe("Deployment page", () => {
     ]);
     expect(within(facts).getByText("Preflight")).toBeInTheDocument();
     expect(within(facts).getByText("Succeeded")).toHaveClass("status-ok");
-    expect(within(facts).getByText(f.okRev)).toBeInTheDocument();
+    expect(within(facts).getByRole("row", { name: /^Tests/ })).toHaveTextContent(/^Tests—$/);
     expect(within(facts).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual([
       `/applications/${f.appId}/builds/build-ok`,
       `/applications/${f.appId}/deliveries/run-ok`,
     ]);
-    expect(within(facts).getByRole("button", { name: "Copy image reference" })).toBeInTheDocument();
-    expect(within(facts).getByText("2m 00s")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Deployments" })).toHaveAttribute("href", `/applications/${f.appId}/deployments`);
+    const steps = screen.getByRole("table", { name: "Deployment steps" });
+    const rows = within(steps).getAllByRole("row").slice(1);
+    expect(rows.map((r) => within(r).getAllByRole("cell")[1].textContent)).toEqual(["Update gitops", "Reconcile"]);
+    expect(within(rows[0]).getByRole("link", { name: "Update gitops details" })).toHaveAttribute(
+      "href",
+      `/applications/${f.appId}/deployments/dep-1/steps/UPDATE_GITOPS`,
+    );
+    expect(within(rows[1]).getByRole("link", { name: "Reconcile details" })).toHaveAttribute(
+      "href",
+      `/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`,
+    );
   });
 
   it("is a real route; another user's or an unknown Deployment is not found", async () => {
@@ -1086,14 +1035,72 @@ describe("Deployment page", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Not found, or not yours.");
   });
 
-  it("shows a failed Deployment's error, and no Build link without one", async () => {
-    const failed = { ...detail, status: "FAILED", build: null, gitopsCommit: undefined, failureReason: "FLUX_RECONCILIATION_FAILED", failureMessage: "Ready=False" };
+  it("shows a failed Deployment's error, its failed step's, and no Build link without one", async () => {
+    const failed = {
+      ...f.deploymentDetail,
+      status: "FAILED",
+      build: null,
+      gitopsCommit: undefined,
+      failure: { reason: "FLUX_RECONCILIATION_FAILED", message: "Ready=False" },
+      steps: [f.deploymentDetail.steps[0], { ...f.deploymentDetail.steps[1], status: "FAILED", failure: { reason: "FLUX_RECONCILIATION_FAILED", message: "Ready=False" } }],
+    };
     renderAt(`/applications/${f.appId}/deployments/dep-1`, fakeApi({ ...all, [`${app}/deployments/dep-1`]: failed }));
     const facts = await screen.findByRole("table", { name: "Deployment" });
     expect(within(facts).getByText("Failed")).toHaveClass("status-error");
     expect(facts).toHaveTextContent("Flux reconciliation failed: Ready=False");
     expect(facts).toHaveTextContent("not yet");
     expect(within(facts).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual([`/applications/${f.appId}/deliveries/run-ok`]);
+    expect(within(screen.getByRole("table", { name: "Deployment steps" }).querySelectorAll("tbody tr")[1] as HTMLElement).getByText(
+      /Flux reconciliation failed/,
+    )).toBeInTheDocument();
+  });
+
+  it("Update GitOps: its GitOpsUpdate (repository, base, resulting commit), its PipelineRun resolved from the base, TaskRuns and a live log", async () => {
+    renderAt(`/applications/${f.appId}/deployments/dep-1/steps/UPDATE_GITOPS`, api());
+    expect(await screen.findByRole("heading", { level: 1, name: "Update gitops — Deployment #1" })).toBeInTheDocument();
+    const update = screen.getByRole("table", { name: "GitOps update" });
+    expect(within(update).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["Repository", "Base commit", "Resulting commit"]);
+    expect(update).toHaveTextContent("alice/hello-gitops-preflight");
+    expect(within(within(update).getByRole("row", { name: /^Base commit/ })).getByTitle(f.baseCommit)).toBeInTheDocument();
+    expect(within(within(update).getByRole("row", { name: /^Resulting commit/ })).getByTitle(f.gitopsG)).toBeInTheDocument();
+    const pr = screen.getByRole("table", { name: "PipelineRun" });
+    expect(pr).toHaveTextContent("hello-preflight-update/update-preflight-dep-1");
+    expect(within(within(pr).getByRole("row", { name: /^Resolved from/ })).getByTitle(f.baseCommit)).toBeInTheDocument();
+    expect(within(pr).getByRole("row", { name: /^Resolved from/ })).toHaveTextContent(".pathops/tekton/pipelines/update-preflight-gitops.yaml");
+    const tasks = screen.getByRole("region", { name: "TaskRuns" });
+    await userEvent.click(within(tasks).getAllByRole("button", { name: "View log" })[0]);
+    expect(await within(tasks).findByRole("log", { name: "Log of push" })).toHaveTextContent("pushed " + f.gitopsG);
+    expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", `/applications/${f.appId}/deployments/dep-1`);
+  });
+
+  it("Reconcile: its target (G), the Flux execution's baseline and the GitRepository and Kustomization snapshots", async () => {
+    renderAt(`/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`, api());
+    expect(await screen.findByRole("heading", { level: 1, name: "Reconcile — Deployment #1" })).toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Reconciliation" })).getByTitle(f.gitopsG)).toBeInTheDocument();
+    const flux = screen.getByRole("table", { name: "Flux execution" });
+    expect(within(within(flux).getByRole("row", { name: /^Baseline revision/ })).getByTitle(f.baseCommit)).toBeInTheDocument();
+    expect(flux).toHaveTextContent("hello-preflight-deploy");
+    const objects = screen.getByRole("table", { name: "Flux objects" });
+    const [gr, ks] = within(objects).getAllByRole("row").slice(1);
+    expect(gr).toHaveTextContent("GitRepository");
+    expect(gr).toHaveTextContent("hello-gitops-preflight");
+    expect(within(gr).getByTitle(f.gitopsG)).toBeInTheDocument();
+    expect(ks).toHaveTextContent("Kustomization");
+    expect(ks).toHaveTextContent("ReconciliationSucceeded");
+    expect(ks).toHaveTextContent("Applied revision");
+    expect(ks).toHaveTextContent("2 / 2");
+    // No logs: Flux has no TaskRuns.
+    expect(screen.queryByRole("region", { name: "TaskRuns" })).toBeNull();
+  });
+
+  it("Reconcile: an object that did not exist, and one never observed", async () => {
+    const x = f.reconcileStep.execution as import("../api/types").FluxExecution;
+    const step = { ...f.reconcileStep, status: "RUNNING", execution: { ...x, gitRepository: { ...x.gitRepository!, found: false }, kustomization: null } };
+    renderAt(`/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`, fakeApi({ ...all, [`${app}/deployments/dep-1/steps/RECONCILE`]: step }));
+    const objects = await screen.findByRole("table", { name: "Flux objects" });
+    const [gr, ks] = within(objects).getAllByRole("row").slice(1);
+    expect(gr).toHaveTextContent("did not exist");
+    expect(ks).toHaveTextContent("not observed");
   });
 });
 
