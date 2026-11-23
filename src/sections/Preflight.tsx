@@ -10,7 +10,8 @@ import { deriveEnvironmentStatus } from "../environment";
 //   Last deployed  when its current version (last successful Deployment) was deployed
 //   Tests          its validations: none run yet (Validation execution is a
 //                  later milestone), so "Not configured", never a count
-//   Open App       the deployed app, when PathOps exposes the environment
+//   Route          the default Route's Preflight hostname (Decision 0067)
+//   Open App       the deployed app at that Route's URL
 export function Preflight({ env }: { env: EnvironmentSummary }) {
   const status = deriveEnvironmentStatus(env.last);
   return (
@@ -27,12 +28,17 @@ export function Preflight({ env }: { env: EnvironmentSummary }) {
         <Fact label="Tests">
           <span className="muted">Not configured</span>
         </Fact>
+        {env.route && (
+          <Fact label="Route">
+            <ExternalLink href={env.route.url}>{env.route.hostname}</ExternalLink>
+          </Fact>
+        )}
       </Facts>
       {/* Also when Unstable: the app may still answer, to inspect by hand;
           the Status says the environment is not sound. */}
-      {env.url && status.state !== "NOT_DEPLOYED" && (
+      {env.route && status.state !== "NOT_DEPLOYED" && (
         <p>
-          <ExternalLink href={env.url}>Open App</ExternalLink>
+          <ExternalLink href={env.route.url}>Open App</ExternalLink>
         </p>
       )}
     </>

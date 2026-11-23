@@ -76,7 +76,7 @@ of the list shows its control disabled, a list of one page none.
   last delivery, provisioning; Production "not created yet"; Preflight its
   state, `Healthy — 2h`, never a Deployment or Delivery number; "not created
   yet" without Preflight) and the tabs Production, Preflight, Delivery,
-  Deployments, Images, Builds, Repositories, Provisioning (no Validations tab:
+  Deployments, Routes, Images, Builds, Repositories, Provisioning (no Validations tab:
   a Validation is shown in its Deployment, Decision 0066). Production says its
   environment has not been created yet, Preflight the same without Preflight; Deployments is always there, empty before the
   first; the others appear when the Tenant Control Plane names them
@@ -84,9 +84,14 @@ of the list shows its control disabled, a list of one page none.
 - **Preflight**: how the environment is now, not how it was deployed: Status
   (its state), Commit (its last Deployment's), Last deployed (its current
   version's, relative: `just now`, `2m ago`, `1h ago`, `1d ago`), Tests ("Not
-  configured" until Validation execution exists) and **Open App ↗** (a new
-  tab) when the Tenant Control Plane gives the environment's URL; none today,
-  so no link.
+  configured" until Validation execution exists), Route (the default Route's
+  Preflight hostname, Decision 0067) and **Open App ↗** (a new tab) at the
+  default Route's URL the Tenant Control Plane gives, once deployed.
+- **Routes** (Decision 0067): the external names reserved for the
+  Application, the default first: Name, Default (Yes/No), Preflight and
+  Production hostnames as links, exactly as the Tenant Control Plane derives
+  them (the frontend never builds a hostname); a Status column only while a
+  Route is not in effect. A Production hostname is reserved, not deployed.
 - **Environment state** (`src/environment.ts`, `deriveEnvironmentStatus`),
   derived from the read model, never stored, and not a Deployment's status:
   no Deployment, Not deployed; the last Deployment in progress, Deploying;

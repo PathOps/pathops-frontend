@@ -12,6 +12,7 @@ import { Preflight } from "../sections/Preflight";
 import { Images } from "../sections/Images";
 import { ProvisioningSection } from "../sections/Provisioning";
 import { RepositoriesSection } from "../sections/Repositories";
+import { RoutesSection } from "../sections/Routes";
 import { technologyLine } from "./ApplicationsPage";
 
 interface Section {
@@ -52,6 +53,7 @@ const sections: Record<string, Section> = {
   },
   deliveries: { title: "Delivery", render: (id) => <Deliveries appId={id} /> },
   deployments: { title: "Deployments", planned: true, render: (id) => <Deployments appId={id} /> },
+  routes: { title: "Routes", render: (id) => <RoutesSection appId={id} /> },
   images: { title: "Images", render: (id, o) => <Images appId={id} current={{ PREFLIGHT: o.preflight?.current }} /> },
   builds: { title: "Builds", render: (id) => <Builds appId={id} /> },
   repositories: { title: "Repositories", render: (id) => <RepositoriesSection appId={id} /> },

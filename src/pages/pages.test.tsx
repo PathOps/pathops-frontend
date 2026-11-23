@@ -900,8 +900,9 @@ describe("Preflight (Decision 0064)", () => {
     expect(summary).not.toHaveTextContent("Deployment #");
   });
 
-  it("states Not deployed, Deploying, Healthy and Unstable; Open App when PathOps gives the app's URL, also when Unstable", async () => {
-    const url = "https://manual-web-preflight.example.test/";
+  it("states Not deployed, Deploying, Healthy and Unstable; Open App at the default Route's URL, also when Unstable", async () => {
+    const url = "https://api-shop-preflight-testing.demo.pathops.io";
+    const route = { name: "api-shop", hostname: "api-shop-preflight-testing.demo.pathops.io", url };
     const running = {
       ...dep,
       id: "dep-2",
@@ -913,10 +914,10 @@ describe("Preflight (Decision 0064)", () => {
       sourceRevision: "bbbbbbbbbbbb" + "c".repeat(28),
     };
     const cases: [string, unknown, string, boolean][] = [
-      ["Not deployed", { environment: "PREFLIGHT", last: null, current: null, url }, "status-neutral", false],
-      ["Deploying", { environment: "PREFLIGHT", last: running, current: dep, url }, "status-running", true],
-      ["Healthy", { environment: "PREFLIGHT", last: dep, current: dep, url }, "status-ok", true],
-      ["Unstable", { environment: "PREFLIGHT", last: { ...running, status: "FAILED", completedAt: dep.completedAt }, current: dep, url }, "status-error", true],
+      ["Not deployed", { environment: "PREFLIGHT", last: null, current: null, route }, "status-neutral", false],
+      ["Deploying", { environment: "PREFLIGHT", last: running, current: dep, route }, "status-running", true],
+      ["Healthy", { environment: "PREFLIGHT", last: dep, current: dep, route }, "status-ok", true],
+      ["Unstable", { environment: "PREFLIGHT", last: { ...running, status: "FAILED", completedAt: dep.completedAt }, current: dep, route }, "status-error", true],
     ];
     for (const [state, preflight, cls, open] of cases) {
       const { unmount } = renderAt(`/applications/${f.appId}/preflight`, fakeApi(withEnv(preflight)));
@@ -927,6 +928,9 @@ describe("Preflight (Decision 0064)", () => {
         expect(link).toHaveAttribute("href", url);
         expect(link).toHaveAttribute("target", "_blank");
       } else expect(link).not.toBeInTheDocument();
+      // The default Route is always shown, with its hostname (not the
+      // Application's name).
+      expect(within(facts).getByRole("link", { name: "api-shop-preflight-testing.demo.pathops.io ↗" })).toHaveAttribute("href", url);
       // The Commit is the last Deployment's, the one the state is about.
       if (state === "Deploying") expect(within(facts).getByText("bbbbbbbbbbbb")).toBeInTheDocument();
       if (state === "Not deployed") expect(within(facts).getAllByText("—")).toHaveLength(2);
@@ -934,6 +938,52 @@ describe("Preflight (Decision 0064)", () => {
     }
   });
 
+});
+
+describe("Routes (Decision 0067)", () => {
+  const routeOf = (name: string, isDefault: boolean, status = "ACTIVE", run: unknown = null) => ({
+    name,
+    default: isDefault,
+    application: { id: f.appId, name: "manual-web" },
+    hosts: ["PREFLIGHT", "PRODUCTION"].map((env) => {
+      const hostname = `${name}-${env.toLowerCase()}-testing.demo.pathops.io`;
+      return { environment: env, hostname, url: `https://${hostname}` };
+    }),
+    status,
+    run,
+    createdAt: "2026-11-23T10:00:00Z",
+  });
+  const withRoutes = (routes: unknown[]) => ({
+    ...all,
+    [`${app}/overview`]: { ...f.overview, sections: [...f.overview.sections, "routes"] },
+    [`${app}/routes`]: { routes },
+  });
+
+  it("lists the Routes from the Tenant CP: Name, Default, Preflight and Production hostnames as links", async () => {
+    renderAt(`/applications/${f.appId}/routes`, fakeApi(withRoutes([routeOf("api-shop", true), routeOf("idp-shop", false)])));
+    const table = await screen.findByRole("table", { name: "Routes" });
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Name", "Default", "Preflight", "Production"]);
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((r) => within(r).getAllByRole("cell")[0].textContent)).toEqual(["api-shop", "idp-shop"]);
+    expect(within(rows[0]).getByText("Yes")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("No")).toBeInTheDocument();
+    expect(within(rows[1]).getByRole("link", { name: "idp-shop-production-testing.demo.pathops.io ↗" })).toHaveAttribute(
+      "href",
+      "https://idp-shop-production-testing.demo.pathops.io",
+    );
+    // The tab is there because the Tenant CP names the section.
+    expect(screen.getByRole("link", { name: "Routes" })).toBeInTheDocument();
+  });
+
+  it("shows a Status column only while a Route is not in effect", async () => {
+    renderAt(
+      `/applications/${f.appId}/routes`,
+      fakeApi(withRoutes([routeOf("api-shop", true), routeOf("idp-shop", false, "PENDING", { id: "r", type: "ROUTE_CREATION", status: "WAITING_FOR_AUTHORIZATION" })])),
+    );
+    const table = await screen.findByRole("table", { name: "Routes" });
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toContain("Status");
+    expect(within(table).getByText("Waiting for authorization")).toBeInTheDocument();
+  });
 });
 
 describe("Deployments", () => {

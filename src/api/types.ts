@@ -64,13 +64,30 @@ export interface DeploymentRef {
 
 // EnvironmentSummary is an environment's page: its last Deployment and the
 // last successful one (what runs there now).
-// url is where the deployed app answers, when PathOps exposes the
-// environment (absent: not exposed, no link).
+// route is the Application's default Route in this environment (Decision
+// 0067): its canonical URL is where the deployed app answers ("Open App");
+// null when the Cell names no Routes.
 export interface EnvironmentSummary {
   environment: string;
   last: DeploymentRef | null;
   current: DeploymentRef | null;
-  url?: string;
+  route?: { name: string; hostname: string; url: string } | null;
+}
+
+// Route is an Application's Route (Decision 0067): its hostnames are the
+// Tenant CP's, never derived here.
+export interface Route {
+  name: string;
+  default: boolean;
+  application: { id: string; name: string };
+  hosts: { environment: string; hostname: string; url: string }[];
+  status: string;
+  run?: { id: string; type: string; status: string } | null;
+  createdAt: string;
+}
+
+export interface RouteList {
+  routes: Route[];
 }
 
 // ExecutionSummary is what an engine reported, in short: its own status,
