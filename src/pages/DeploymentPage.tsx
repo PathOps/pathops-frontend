@@ -47,7 +47,7 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
             .sort((a, b) => a.position - b.position)
             .map((s: DeploymentStep) => (
               <tr key={s.type}>
-                <td>{s.startedAt ? <Link to={stepPath(appId, d.id, s.type)}>{s.position}</Link> : s.position}</td>
+                <td>{s.startedAt ? <Link to={stepPath(appId, d.id, s.type)}>#{s.position}</Link> : s.position}</td>
                 <td>{stepTitle(s.type)}</td>
                 <td>
                   <Status status={s.status} />

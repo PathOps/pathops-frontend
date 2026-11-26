@@ -117,7 +117,7 @@ of the list shows its control disabled, a list of one page none.
   with its Deployment and its steps Update GitOps (GitOps Commit and
   Execution) and Reconcile (Target and Execution: GitRepository,
   Kustomization). Step names are in Title Case and never links; a
-  Deployment's step `#` (its position) links the step's page, a top-level
+  Deployment's step `#N` (its position) links the step's page, a top-level
   step's `#` links nothing (its Build or Deployment `#` links that page). Where it starts: a succeeded run with its
   steps closed (`[+]`, one line each); a failed run with its failed step's
   branch open and its succeeded steps closed; a running run with its running
@@ -129,7 +129,7 @@ of the list shows its control disabled, a list of one page none.
 - **Deployment**: `Deployment #N`: environment, status (and its error),
   commit, image (its digest, a copy of the reference and the Build that
   produced it), Tests (`—`), delivery, start, duration and GitOps commit (G);
-  then its steps (`# | Step | Status | Started | Duration`: `#` the
+  then its steps (`# | Step | Status | Started | Duration`: `#N` the
   position, a link to the step's page).
 - **Build**, **Update GitOps** and **Reconcile** pages: the step (or Build),
   then what PathOps accepted (Build; GitOps Commit: repository, base commit,

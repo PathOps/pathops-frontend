@@ -42,7 +42,7 @@ function StepRow({ s, to }: { s: DeliveryStep; to?: string }) {
       label={`Step ${stepTitle(s.type)}`}
       head={stepHead}
       cells={[
-        to ? <Link to={to}>{s.position}</Link> : String(s.position),
+        to ? <Link to={to}>#{s.position}</Link> : String(s.position),
         stepTitle(s.type),
         <Status status={s.status} />,
         <Time at={s.startedAt} />,

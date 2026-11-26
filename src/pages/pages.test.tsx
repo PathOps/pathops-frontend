@@ -265,7 +265,7 @@ describe("Delivery run", () => {
       "href",
       `/applications/${f.appId}/deployments/dep-1`,
     );
-    for (const [name, type, pos] of [["Update GitOps", "UPDATE_GITOPS", "1"], ["Reconcile", "RECONCILE", "2"]]) {
+    for (const [name, type, pos] of [["Update GitOps", "UPDATE_GITOPS", "#1"], ["Reconcile", "RECONCILE", "#2"]]) {
       const links = within(within(deploy).getByRole("table", { name: `Step ${name}` })).getAllByRole("link");
       expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([[pos, `/applications/${f.appId}/deployments/dep-1/steps/${type}`]]);
     }
@@ -1187,10 +1187,10 @@ describe("Deployment page", () => {
     expect(rows.map((r) => within(r).getAllByRole("cell")[1].textContent)).toEqual(["Update GitOps", "Reconcile"]);
     // The step's # is the only link of its row, never its name.
     expect(within(rows[0]).getAllByRole("link").map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
-      ["1", `/applications/${f.appId}/deployments/dep-1/steps/UPDATE_GITOPS`],
+      ["#1", `/applications/${f.appId}/deployments/dep-1/steps/UPDATE_GITOPS`],
     ]);
     expect(within(rows[1]).getAllByRole("link").map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
-      ["2", `/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`],
+      ["#2", `/applications/${f.appId}/deployments/dep-1/steps/RECONCILE`],
     ]);
     expect(steps).not.toHaveTextContent("GitOps update");
     expect(steps).not.toHaveTextContent("Reconciliation");
