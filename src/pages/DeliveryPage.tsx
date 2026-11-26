@@ -23,9 +23,9 @@ import { stepPath } from "./DeploymentPage";
 // (what the engine reported) as siblings; under a Tekton Execution its
 // PipelineRun, TaskRuns and Steps (logs live), under a Flux one its
 // GitRepository and Kustomization. Only the few facts that tell what
-// happened; a projection's # (Build, Deployment, GitOps update,
-// Reconciliation) links the page with all of them. A step's # is only its
-// position.
+// happened; a projection's # (Build, Deployment) links the page with all of
+// them. A Deployment's step (Update GitOps, Reconcile) has its own page: its
+// # (its position) links it; its record (GitOps Commit, Target) has no #.
 //
 // Where it starts: a succeeded run with its steps closed (one line each); a
 // failed run with the branch of its failed step open, its succeeded steps
@@ -34,15 +34,15 @@ import { stepPath } from "./DeploymentPage";
 
 const stepHead = ["#", "Step", "Status", "Started", "Duration"];
 
-// StepRow is a step's one-row table: its position (not a link: a step is
-// not its projection), its name, its verdict and times.
-function StepRow({ s }: { s: DeliveryStep }) {
+// StepRow is a step's one-row table: its position (a link to the step's page
+// when it has one), its name, its verdict and times.
+function StepRow({ s, to }: { s: DeliveryStep; to?: string }) {
   return (
     <Row
       label={`Step ${stepTitle(s.type)}`}
       head={stepHead}
       cells={[
-        String(s.position),
+        to ? <Link to={to}>{s.position}</Link> : String(s.position),
         stepTitle(s.type),
         <Status status={s.status} />,
         <Time at={s.startedAt} />,
@@ -220,8 +220,8 @@ function BuildBranch({ appId, runStatus, s }: { appId: string; runStatus: string
   );
 }
 
-// ChildBranch is one step of a Deployment: its projection (GitOps update,
-// Reconciliation) and its Execution, from the step's page data. Live with
+// ChildBranch is one step of a Deployment: its record (GitOps Commit,
+// Target) and its Execution, from the step's page data. Live with
 // the run; read again every few seconds while it runs.
 function ChildBranch({ appId, runId, parent, deploymentId, s }: { appId: string; runId: string; parent: string; deploymentId?: string; s: DeliveryStep }) {
   const started = !!deploymentId && !!s.startedAt;
@@ -234,16 +234,16 @@ function ChildBranch({ appId, runId, parent, deploymentId, s }: { appId: string;
   const d = r.data;
   const to = started ? stepPath(appId, deploymentId!, s.type) : undefined;
   return (
-    <Node id={id} label={stepTitle(s.type)} table={<StepRow s={s} />} note={s.failure && <FailureText failure={s.failure} />} defaultOpen={childOpen(s)}>
+    <Node id={id} label={stepTitle(s.type)} table={<StepRow s={s} to={to} />} note={s.failure && <FailureText failure={s.failure} />} defaultOpen={childOpen(s)}>
       {d?.gitopsUpdate && (
         <Node
           id={`${id}/update`}
-          label={`GitOps update #${d.gitopsUpdate.number}`}
+          label="GitOps Commit"
           table={
             <Row
-              label="GitOps update"
-              head={["GitOps update", "Repository", "Result"]}
-              cells={[<Link to={to!}>#{d.gitopsUpdate.number}</Link>, d.gitopsUpdate.repository, <Sha12 sha={d.gitopsUpdate.resultingCommit} />]}
+              label="GitOps Commit"
+              head={["Repository", "Resulting commit"]}
+              cells={[d.gitopsUpdate.repository, <Sha12 sha={d.gitopsUpdate.resultingCommit} />]}
             />
           }
         />
@@ -251,14 +251,8 @@ function ChildBranch({ appId, runId, parent, deploymentId, s }: { appId: string;
       {d?.reconciliation && (
         <Node
           id={`${id}/reconciliation`}
-          label={`Reconciliation #${d.reconciliation.number}`}
-          table={
-            <Row
-              label="Reconciliation"
-              head={["Reconciliation", "Target revision"]}
-              cells={[<Link to={to!}>#{d.reconciliation.number}</Link>, <Sha12 sha={d.reconciliation.targetRevision} />]}
-            />
-          }
+          label="Target"
+          table={<Row label="Target" head={["Target revision"]} cells={[<Sha12 sha={d.reconciliation.targetRevision} />]} />}
         />
       )}
       {d?.execution && (

@@ -84,9 +84,9 @@ of the list shows its control disabled, a list of one page none.
 - **Preflight**: how the environment is now, not how it was deployed: Status
   (its state), Commit (its last Deployment's), Last deployed (its current
   version's, relative: `just now`, `2m ago`, `1h ago`, `1d ago`), Tests ("Not
-  configured" until Validation execution exists), Route (the default Route's
-  Preflight hostname, Decision 0067) and **Open App ↗** (a new tab) at the
-  default Route's URL the Tenant Control Plane gives, once deployed.
+  configured" until Validation execution exists) and Default Route (the
+  default Route's Preflight hostname, Decision 0067: a link, in a new tab, to
+  the URL the Tenant Control Plane gives).
 - **Routes** (Decision 0067): the external names reserved for the
   Application, the default first: Name, Default (Yes/No), Preflight and
   Production hostnames as links, exactly as the Tenant Control Plane derives
@@ -114,11 +114,11 @@ of the list shows its control disabled, a list of one page none.
   delivery id, times, error), then its steps as a tree of one-row tables hung
   by lines: Build Application with its Build and its Execution (Tekton:
   PipelineRun, TaskRuns, Steps with live logs) as siblings; Deploy Preflight
-  with its Deployment and its steps Update GitOps (GitOps update #N and
-  Execution) and Reconcile (Reconciliation #N and Execution: GitRepository,
-  Kustomization). Step names are in Title Case; a step's `#` is only its
-  position; a projection's `#` (Build, Deployment, GitOps update,
-  Reconciliation) links its page. Where it starts: a succeeded run with its
+  with its Deployment and its steps Update GitOps (GitOps Commit and
+  Execution) and Reconcile (Target and Execution: GitRepository,
+  Kustomization). Step names are in Title Case and never links; a
+  Deployment's step `#` (its position) links the step's page, a top-level
+  step's `#` links nothing (its Build or Deployment `#` links that page). Where it starts: a succeeded run with its
   steps closed (`[+]`, one line each); a failed run with its failed step's
   branch open and its succeeded steps closed; a running run with its running
   branch open. Opening a step opens its whole branch; below it each node
@@ -129,11 +129,11 @@ of the list shows its control disabled, a list of one page none.
 - **Deployment**: `Deployment #N`: environment, status (and its error),
   commit, image (its digest, a copy of the reference and the Build that
   produced it), Tests (`—`), delivery, start, duration and GitOps commit (G);
-  then its steps (`# | Step | Status | Started | Duration | Result`: `#` the
-  position, Result the GitOps update #N or Reconciliation #N, linked).
+  then its steps (`# | Step | Status | Started | Duration`: `#` the
+  position, a link to the step's page).
 - **Build**, **Update GitOps** and **Reconcile** pages: the step (or Build),
-  then the projection (Build; GitOps update: repository, base commit,
-  resulting commit; Reconciliation: target revision), then the Execution's
+  then what PathOps accepted (Build; GitOps Commit: repository, base commit,
+  resulting commit; Target: target revision), then the Execution's
   generic facts (executor, status, times, reason, message), then the
   engine's own: the PipelineRun (where Tekton resolved it from, trigger,
   results), its TaskRuns and steps with exit codes and live logs ("no longer

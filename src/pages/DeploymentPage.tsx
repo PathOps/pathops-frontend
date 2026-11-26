@@ -27,8 +27,8 @@ export function stepPath(appId: string, deploymentId: string, type: string): str
 }
 
 // Steps are a Deployment's own steps in order: Update GitOps, Reconcile
-// (Validate later). # is only the step's position; what each step produced
-// (GitOps update #N, Reconciliation #N) links its page.
+// (Validate later). # is the step's position, a link to its page (as # links
+// a Build, a Delivery or a Deployment elsewhere; never the name).
 function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
   return (
     <div className="scroll">
@@ -40,7 +40,6 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
             <th>Status</th>
             <th>Started</th>
             <th>Duration</th>
-            <th>Result</th>
           </tr>
         </thead>
         <tbody>
@@ -48,7 +47,7 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
             .sort((a, b) => a.position - b.position)
             .map((s: DeploymentStep) => (
               <tr key={s.type}>
-                <td>{s.position}</td>
+                <td>{s.startedAt ? <Link to={stepPath(appId, d.id, s.type)}>{s.position}</Link> : s.position}</td>
                 <td>{stepTitle(s.type)}</td>
                 <td>
                   <Status status={s.status} />
@@ -64,15 +63,6 @@ function Steps({ appId, d }: { appId: string; d: DeploymentDetail }) {
                 </td>
                 <td>
                   <Duration seconds={s.durationSeconds} />
-                </td>
-                <td>
-                  {s.gitopsUpdate ? (
-                    <Link to={stepPath(appId, d.id, s.type)}>GitOps update #{s.gitopsUpdate.number}</Link>
-                  ) : s.reconciliation ? (
-                    <Link to={stepPath(appId, d.id, s.type)}>Reconciliation #{s.reconciliation.number}</Link>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
                 </td>
               </tr>
             ))}

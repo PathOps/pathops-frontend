@@ -10,8 +10,8 @@ import { deriveEnvironmentStatus } from "../environment";
 //   Last deployed  when its current version (last successful Deployment) was deployed
 //   Tests          its validations: none run yet (Validation execution is a
 //                  later milestone), so "Not configured", never a count
-//   Route          the default Route's Preflight hostname (Decision 0067)
-//   Open App       the deployed app at that Route's URL
+//   Default Route  the default Route's Preflight hostname, a link to the
+//                  deployed app (Decision 0067)
 export function Preflight({ env }: { env: EnvironmentSummary }) {
   const status = deriveEnvironmentStatus(env.last);
   return (
@@ -29,18 +29,11 @@ export function Preflight({ env }: { env: EnvironmentSummary }) {
           <span className="muted">Not configured</span>
         </Fact>
         {env.route && (
-          <Fact label="Route">
+          <Fact label="Default Route">
             <ExternalLink href={env.route.url}>{env.route.hostname}</ExternalLink>
           </Fact>
         )}
       </Facts>
-      {/* Also when Unstable: the app may still answer, to inspect by hand;
-          the Status says the environment is not sound. */}
-      {env.route && status.state !== "NOT_DEPLOYED" && (
-        <p>
-          <ExternalLink href={env.route.url}>Open App</ExternalLink>
-        </p>
-      )}
     </>
   );
 }

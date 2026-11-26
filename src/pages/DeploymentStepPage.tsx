@@ -16,8 +16,9 @@ import { appPath } from "./BuildPage";
 
 // DeploymentStepPage is one step of a Deployment (Decision 0066), all of
 // what PathOps recorded of it, in this order: the step (PathOps' verdict);
-// its projection (what PathOps accepted: the GitOps update's repository,
-// base and resulting commit; the Reconciliation's target); its Execution
+// what PathOps accepted of it (Update GitOps: its GitOps Commit, the
+// repository, base and resulting commit; Reconcile: its Target revision),
+// without the record's own number (it has no page but this one); its Execution
 // (what the engine reported: the generic facts first, then the engine's
 // own: Tekton's PipelineRun, TaskRuns and Steps with live logs; Flux's
 // namespace and baseline, then its GitRepository and Kustomization, each
@@ -75,8 +76,8 @@ export function DeploymentStepPage() {
             </Facts>
             {d.gitopsUpdate && (
               <>
-                <h2>GitOps update #{d.gitopsUpdate.number}</h2>
-                <Facts label="GitOps update">
+                <h2>GitOps Commit</h2>
+                <Facts label="GitOps Commit">
                   <Fact label="Repository">{d.gitopsUpdate.repository}</Fact>
                   <Fact label="Base commit">
                     <FullSha sha={d.gitopsUpdate.baseCommit} />
@@ -89,8 +90,8 @@ export function DeploymentStepPage() {
             )}
             {d.reconciliation && (
               <>
-                <h2>Reconciliation #{d.reconciliation.number}</h2>
-                <Facts label="Reconciliation">
+                <h2>Target</h2>
+                <Facts label="Target">
                   <Fact label="Target revision">
                     <FullSha sha={d.reconciliation.targetRevision} />
                   </Fact>
