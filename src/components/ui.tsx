@@ -25,6 +25,7 @@ const statusClass: Record<string, string> = {
   DEPLOYING: "running",
   VALIDATING: "running",
   PENDING: "warning",
+  CANCELLED: "neutral",
   WAITING_FOR_AUTHORIZATION: "warning",
   AUTHORIZATION_REQUIRED: "warning",
   waiting: "warning",

@@ -61,7 +61,7 @@ export const overview: Overview = {
   },
   technology: { runtime: "container", language: "any", build: "Dockerfile (BuildKit)" },
   provisioning: { runId: "run-p", status: "SUCCEEDED", createdAt: t0, completedAt: t1, steps: 12, succeeded: 12 },
-  deliveries: { total: 2, succeeded: 1, failed: 1, running: 0, last: applications.applications[0].lastDelivery },
+  deliveries: { total: 2, succeeded: 1, failed: 1, cancelled: 0, running: 0, last: applications.applications[0].lastDelivery },
   images: 1,
   sections: ["general", "provisioning", "repositories", "builds", "images", "deliveries"],
   repositories: [
@@ -76,7 +76,6 @@ const stepTypes = [
   "CREATE_SOURCE_REPOSITORY",
   "CREATE_PREFLIGHT_GITOPS_REPOSITORY",
   "CREATE_PRODUCTION_GITOPS_REPOSITORY",
-  "CONFIGURE_SOURCE_WEBHOOKS",
   "CREATE_CI_NAMESPACE",
   "CONFIGURE_BUILD_AND_PUSH_SOURCE_RESOLUTION_ACCESS",
   "CONFIGURE_BUILD_AND_PUSH_SOURCE_CHECKOUT_ACCESS",
@@ -113,7 +112,6 @@ export const repositories: Repositories = {
     metadata: null,
     metadataStatus: "not_available",
   })),
-  webhook: { events: ["push"], lastDeliveryAt: t1 },
 };
 
 export const deliveries: { deliveries: DeliverySummary[] } = {
@@ -121,7 +119,10 @@ export const deliveries: { deliveries: DeliverySummary[] } = {
     {
       id: "run-bad",
       number: 2,
-      trigger: "PUSH",
+      trigger: "MANUAL_DELIVER",
+      requestedBy: { subject: "alice-sub", name: "Alice" },
+      activeStep: null,
+      cancellation: null,
       sourceRevision: badRev,
       head12: badRev.slice(0, 12),
       status: "FAILED",
@@ -135,7 +136,10 @@ export const deliveries: { deliveries: DeliverySummary[] } = {
     {
       id: "run-ok",
       number: 1,
-      trigger: "PUSH",
+      trigger: "MANUAL_DELIVER",
+      requestedBy: { subject: "alice-sub", name: "Alice" },
+      activeStep: null,
+      cancellation: null,
       sourceRevision: okRev,
       head12: okRev.slice(0, 12),
       status: "SUCCEEDED",
@@ -184,7 +188,7 @@ function detail(s: DeliverySummary, deployment?: { id: string; number: number; s
   return {
     ...s,
     applicationId: appId,
-    triggerId: "wd-1",
+    triggerId: "0b0f6a2e-7b4f-4c1e-9a55-3f1d2c3b4a51",
     sourceRepository: "alice/manual-web",
     sourceRef: "refs/heads/main",
     steps,
@@ -192,6 +196,30 @@ function detail(s: DeliverySummary, deployment?: { id: string; number: number; s
 }
 
 export const deliveryOk = detail(deliveries.deliveries[1], { id: "dep-1", number: 1, status: "SUCCEEDED" });
+
+// deliveryCancelled was cancelled by its owner during its update (Decision
+// 0070): the build kept its result, the update CANCELLED, Reconcile SKIPPED.
+export const deliveryCancelled: DeliveryDetail = (() => {
+  const d = detail(
+    { ...deliveries.deliveries[1], id: "run-cancel", number: 3, status: "CANCELLED", cancellation: { by: { subject: "alice-sub", name: "Alice" }, at: t1 } },
+    { id: "dep-2", number: 2, status: "CANCELLED" },
+  );
+  d.steps[0].status = "SUCCEEDED";
+  d.steps[1].steps = [
+    {
+      position: 1,
+      type: "UPDATE_GITOPS",
+      status: "CANCELLED",
+      startedAt: t1,
+      completedAt: t1,
+      durationSeconds: 5,
+      failure: null,
+      execution: { executor: "TEKTON", status: "CANCELLED", reason: "DELIVERY_CANCELLED" },
+    },
+    { position: 2, type: "RECONCILE", status: "SKIPPED", startedAt: null, completedAt: null, durationSeconds: null, failure: null, execution: null },
+  ];
+  return d;
+})();
 export const deliveryBad = detail(deliveries.deliveries[0]);
 
 // execution is a Tekton Execution with its TaskRuns, as PathOps recorded it.

@@ -55,7 +55,8 @@ function StepRow({ s, to }: { s: DeliveryStep; to?: string }) {
 // ExecutionRow is an Execution's one-row table: its executor, what it
 // reported and how long it took (its reason only when it failed).
 function ExecutionRow({ x }: { x: TektonExecution | FluxExecution }) {
-  const failed = x.status === "FAILED";
+  // A cancelled Execution's reason says PathOps stopped managing it.
+  const failed = x.status === "FAILED" || x.status === "CANCELLED";
   return (
     <Row
       label={`Execution ${executorName(x.executor)}`}
@@ -169,7 +170,7 @@ function ExecutionNode({ id, x, logPath }: { id: string; x: TektonExecution | Fl
 // when it failed or runs (a succeeded run: all closed).
 function rootOpen(runStatus: string, s: DeliveryStep): boolean {
   if (runStatus === "SUCCEEDED") return false;
-  return s.status === "FAILED" || s.status === "RUNNING";
+  return s.status === "FAILED" || s.status === "RUNNING" || s.status === "CANCELLED";
 }
 
 // childOpen is where a step under a top-level one starts: open unless it
@@ -379,11 +380,20 @@ export function DeliveryPage() {
                 {d.sourceRepository} · {d.sourceRef}
               </Fact>
               <Fact label="Trigger">
-                {humanize(d.trigger)} <small className="muted">{d.triggerId}</small>
+                {humanize(d.trigger)} <small className="muted">requested by {d.requestedBy.name || d.requestedBy.subject}</small>
               </Fact>
-              <Fact label="Push received">
+              <Fact label="Requested">
                 <Time at={d.createdAt} />
               </Fact>
+              {d.cancellation && (
+                <Fact label="Cancelled">
+                  <Time at={d.cancellation.at} /> <small className="muted">by {d.cancellation.by.name || d.cancellation.by.subject}</small>
+                  <p className="muted">
+                    PathOps ended this delivery and asked Tekton to stop its pipeline run; that run&apos;s end is not confirmed. Nothing was
+                    rolled back.
+                  </p>
+                </Fact>
+              )}
               <Fact label="Completed">
                 <Time at={d.completedAt} />
               </Fact>

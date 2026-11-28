@@ -338,6 +338,21 @@ describe("Delivery run", () => {
     expect(roots(t).map((n) => n.getAttribute("aria-label"))).toEqual(["Build Application", "Deploy Preflight", "Deploy Production"]);
   });
 
+  it("a cancelled run says who cancelled it, keeps the build's result, opens the cancelled step and claims no engine end", async () => {
+    renderAt(`/applications/${f.appId}/deliveries/run-x`, withRun(f.deliveryCancelled));
+    const facts = await screen.findByRole("rowheader", { name: "Cancelled" });
+    expect(facts.nextElementSibling).toHaveTextContent("by Alice");
+    expect(screen.getByText(/that run's end is not confirmed/)).toBeInTheDocument();
+    expect(screen.getByText("Manual deliver")).toBeInTheDocument();
+    expect(screen.getByText("requested by Alice")).toBeInTheDocument();
+    const t = await tree();
+    expect(children(top(t, "Build Application"))).toHaveLength(0);
+    const deploy = top(t, "Deploy Preflight");
+    expect(names(deploy)).toEqual(["Deployment #2", "Update GitOps", "Reconcile"]);
+    expect(deploy).toHaveTextContent("Cancelled");
+    expect(child(deploy, "Reconcile")).toHaveTextContent("Skipped");
+  });
+
   it("is read by number too: /deliveries/1 is the same run", async () => {
     renderAt(`/applications/${f.appId}/deliveries/1`, fakeApi({ ...all, [`${app}/deliveries/1`]: f.deliveryOk }));
     expect(await screen.findByRole("heading", { level: 1, name: "Delivery #1" })).toBeInTheDocument();

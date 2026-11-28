@@ -171,7 +171,7 @@ export interface Overview {
     steps: number;
     succeeded: number;
   };
-  deliveries: { total: number; succeeded: number; failed: number; running: number; last: DeliveryRef | null };
+  deliveries: { total: number; succeeded: number; failed: number; cancelled: number; running: number; last: DeliveryRef | null };
   images: number;
   sections: string[];
   repositories: { role: string; fullName: string; url?: string }[];
@@ -231,7 +231,6 @@ export interface Repository {
 
 export interface Repositories {
   repositories: Repository[];
-  webhook: { events: string[]; lastDeliveryAt: Iso | null } | null;
 }
 
 export interface Image {
@@ -249,10 +248,25 @@ export interface BuildRef {
   image: Image | null;
 }
 
+// Actor is an authenticated user: their subject and, for the Application's
+// owner, their name or email.
+export interface Actor {
+  subject: string;
+  name?: string;
+}
+
+// DeliverySummary is one DeliveryRun (Decision 0070: an explicit request,
+// trigger MANUAL_DELIVER).
 export interface DeliverySummary {
   id: string;
   number: number;
   trigger: string;
+  requestedBy: Actor;
+  // activeStep is the step an active run is executing.
+  activeStep: { type: string; status: string; startedAt: Iso | null } | null;
+  // cancellation is who cancelled it and when: PathOps' decision, not a
+  // confirmation that the engine stopped.
+  cancellation: { by: Actor; at: Iso | null } | null;
   sourceRevision: string;
   head12: string;
   status: string;
